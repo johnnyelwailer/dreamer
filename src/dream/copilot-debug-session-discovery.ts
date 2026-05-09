@@ -1,6 +1,6 @@
+import { basename, join } from "node:path";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
 
 type DiscoveryDeps = {
   platform: NodeJS.Platform;
@@ -15,13 +15,26 @@ type DiscoveryMode = "append" | "override";
 type DiscoveryOptions = {
   searchPaths?: string[];
   mode?: DiscoveryMode;
+  lookbackDays?: number;
 };
 
 const vscodeProductDirs = ["Code", "Code - Insiders", "VSCodium"];
 
-export function discoverCopilotDebugSessionDir(
+export type DiscoveredCopilotSession = {
+  sessionId: string;
+  path: string;
+  mainJsonlPath: string;
+  transcriptPath?: string;
+  mainMtimeMs: number;
+  transcriptMtimeMs: number;
+  activityMs: number;
+  richnessScore: number;
+  transcriptLineCount: number;
+};
+
+export function discoverCopilotDebugSessions(
   options: DiscoveryOptions & Partial<DiscoveryDeps> = {}
-): string | undefined {
+): DiscoveredCopilotSession[] {
   const deps: DiscoveryDeps = {
     platform: options.platform ?? process.platform,
     env: options.env ?? process.env,
@@ -36,8 +49,13 @@ export function discoverCopilotDebugSessionDir(
   const roots = [...(options.mode === "override" ? configured : [...defaults, ...configured])]
     .filter((path, index, values) => values.indexOf(path) === index)
     .filter(deps.exists);
-  const sessions: Array<{ path: string; mtimeMs: number; richnessScore: number }> = [];
 
+  const lookbackThresholdMs =
+    typeof options.lookbackDays === "number" && Number.isFinite(options.lookbackDays) && options.lookbackDays > 0
+      ? Date.now() - options.lookbackDays * 24 * 60 * 60 * 1000
+      : undefined;
+
+  const sessions: DiscoveredCopilotSession[] = [];
   for (const root of roots) {
     const workspaces = deps.readdir(root);
     for (const workspaceId of workspaces) {
@@ -47,22 +65,42 @@ export function discoverCopilotDebugSessionDir(
         const sessionDir = join(debugLogsRoot, sessionId);
         const mainJsonl = join(sessionDir, "main.jsonl");
         if (!deps.exists(mainJsonl)) continue;
+
+        const transcriptPath = join(root, workspaceId, "GitHub.copilot-chat", "transcripts", `${sessionId}.jsonl`);
+        const transcriptExists = deps.exists(transcriptPath);
+        const mainMtimeMs = deps.mtimeMs(mainJsonl);
+        const transcriptMtimeMs = transcriptExists ? deps.mtimeMs(transcriptPath) : 0;
+        const activityMs = Math.max(mainMtimeMs, transcriptMtimeMs);
+        if (lookbackThresholdMs !== undefined && activityMs < lookbackThresholdMs) continue;
+
+        const transcriptStats = scoreTranscriptRichness(transcriptPath);
         sessions.push({
+          sessionId,
           path: sessionDir,
-          mtimeMs: deps.mtimeMs(mainJsonl),
-          richnessScore: scoreTranscriptRichness(sessionDir)
+          mainJsonlPath: mainJsonl,
+          transcriptPath: transcriptExists ? transcriptPath : undefined,
+          mainMtimeMs,
+          transcriptMtimeMs,
+          activityMs,
+          richnessScore: transcriptStats.richnessScore,
+          transcriptLineCount: transcriptStats.lineCount
         });
       }
     }
   }
 
-  sessions.sort((a, b) => b.richnessScore - a.richnessScore || b.mtimeMs - a.mtimeMs);
-  return sessions[0]?.path;
+  sessions.sort((a, b) => b.richnessScore - a.richnessScore || b.activityMs - a.activityMs);
+  return sessions;
 }
 
-function scoreTranscriptRichness(sessionDir: string): number {
-  const transcriptPath = join(sessionDir, "..", "..", "transcripts", `${sessionDir.split("/").pop()}.jsonl`);
-  if (!existsSync(transcriptPath)) return 0;
+export function discoverCopilotDebugSessionDir(
+  options: DiscoveryOptions & Partial<DiscoveryDeps> = {}
+): string | undefined {
+  return discoverCopilotDebugSessions(options)[0]?.path;
+}
+
+function scoreTranscriptRichness(transcriptPath: string): { richnessScore: number; lineCount: number } {
+  if (!existsSync(transcriptPath)) return { richnessScore: 0, lineCount: 0 };
 
   try {
     let messageCount = 0;
@@ -83,9 +121,12 @@ function scoreTranscriptRichness(sessionDir: string): number {
       }
       if (parsed.type?.startsWith("tool.")) toolCount += 1;
     }
-    return substantiveMessageCount * 1000 + messageCount * 50 + toolCount * 5 + lineCount - noisyMessageCount * 200;
+    return {
+      richnessScore: substantiveMessageCount * 1000 + messageCount * 50 + toolCount * 5 + lineCount - noisyMessageCount * 200,
+      lineCount
+    };
   } catch {
-    return 0;
+    return { richnessScore: 0, lineCount: 0 };
   }
 }
 
