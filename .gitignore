@@ -11,6 +11,7 @@ coverage/
 .dreamer/state.json
 .dreamer/copilot-memory.json
 .dreamer/honcho/workspace.json
+.dreamer/copilot-sdk/
 docs/generated/
 reports/
 .pnpm-store/

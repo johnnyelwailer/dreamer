@@ -83,7 +83,7 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
     honchoBaseUrl: process.env.DREAM_HONCHO_BASE_URL ?? process.env.HONCHO_URL,
     honchoEnvironment: readHonchoEnvironment(process.env.DREAM_HONCHO_ENVIRONMENT),
     copilotSdkModel,
-    copilotSdkProviderOptions: buildCopilotSdkProviderOptions(runtime, copilotSdkModel),
+    copilotSdkProviderOptions: buildCopilotSdkProviderOptions(runtime, copilotSdkModel, workspaceDir),
     docsOutputRootPath: runtime.docs.outputRootPath,
     docsFallbackOutputPath: runtime.docs.fallbackOutputPath,
     docsPromptTemplatePath: runtime.docs.promptTemplatePath,

@@ -17,6 +17,10 @@ import {
   scoreReport
 } from "./dream-quality-helpers.js";
 import { buildDreamQualityDiagnostics } from "./dream-quality-diagnostics.js";
+import { runToolContractJudge } from "./dream-quality-tool-judge.js";
+import { buildEvidenceToolingSection, resolveJudgeEvidenceFiles } from "./dream-quality-evidence.js";
+
+export type DreamQualityJudgeMode = "legacy-json" | "tool-contract";
 
 export type DreamQualityReport = {
   generatedAt: string;
@@ -31,12 +35,16 @@ export type DreamQualityReport = {
   docsEvaluated: string[];
   rawJudgeOutput: string;
   judgeParseError?: string;
+  judgeMode?: DreamQualityJudgeMode;
+  judgeToolUsed?: boolean;
+  judgeToolError?: string;
   diagnostics?: unknown;
 };
 
 type RunQualityEvalOptions = {
   runDreamCycle: boolean;
   replayTranscripts?: boolean;
+  judgeMode?: DreamQualityJudgeMode;
 };
 
 export async function runDreamQualityEval(
@@ -52,6 +60,7 @@ export async function runDreamQualityEval(
 
   const runtime = readRuntimeManifest(workspaceDir);
   const config = readDreamConfig(workspaceDir);
+  const judgeMode = options.judgeMode ?? "legacy-json";
   const rubric: DreamQualityRubricConfig = readDreamQualityRubric(workspaceDir, runtime);
   const provider = new CopilotSdkProvider(config.copilotSdkProviderOptions);
 
@@ -68,12 +77,33 @@ export async function runDreamQualityEval(
     const artifacts = await readArtifacts(workspaceDir);
     const promptTemplatePath = resolveWorkspacePath(workspaceDir, rubric.judgePromptTemplatePath);
     const promptTemplate = await readFile(promptTemplatePath, "utf8");
-    const prompt = promptTemplate
+    const evidenceFiles = resolveJudgeEvidenceFiles(config);
+    const prompt = [
+      promptTemplate
       .replaceAll("{{rubric}}", buildRubricText(rubric))
       .replaceAll("{{generatedDocs}}", buildBundleText(docs))
-      .replaceAll("{{artifacts}}", buildBundleText(artifacts));
+      .replaceAll("{{artifacts}}", buildBundleText(artifacts)),
+      "",
+      buildEvidenceToolingSection(evidenceFiles)
+    ].join("\n");
 
-    const rawJudgeOutput = await provider.summarize(prompt);
+    let rawJudgeOutput = "";
+    let judgeToolUsed = false;
+    let judgeToolError: string | undefined;
+    if (judgeMode === "tool-contract") {
+      const toolResult = await runToolContractJudge({
+        providerOptions: config.copilotSdkProviderOptions,
+        prompt,
+        rubricDimensionIds: rubric.dimensions.map((dimension) => dimension.id),
+        evidenceFiles
+      });
+      rawJudgeOutput = toolResult.toolPayload ? JSON.stringify(toolResult.toolPayload) : toolResult.rawOutput;
+      judgeToolUsed = toolResult.toolUsed;
+      judgeToolError = toolResult.toolError;
+    } else {
+      rawJudgeOutput = await provider.summarize(prompt);
+    }
+
     const report = scoreReport(
       rawJudgeOutput,
       rubric,
@@ -81,6 +111,9 @@ export async function runDreamQualityEval(
       config.copilotSdkModel,
       docs.map((doc) => doc.path)
     );
+    report.judgeMode = judgeMode;
+    report.judgeToolUsed = judgeToolUsed;
+    report.judgeToolError = judgeToolError;
     report.diagnostics = await buildDreamQualityDiagnostics(workspaceDir, config);
 
     const reportPath = resolveWorkspacePath(workspaceDir, runtime.eval.quality.reportPath);

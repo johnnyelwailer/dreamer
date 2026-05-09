@@ -44,12 +44,12 @@ function createRuntimeManifest(infiniteSessionsEnabled?: boolean): RuntimeManife
 
 describe("buildCopilotSdkProviderOptions", () => {
   it("disables infinite sessions by default", () => {
-    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5");
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
     expect(options.sessionConfig.infiniteSessions).toEqual({ enabled: false });
   });
 
   it("honors runtime infiniteSessionsEnabled when true", () => {
-    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(true), "gpt-5");
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(true), "gpt-5", process.cwd());
     expect(options.sessionConfig.infiniteSessions).toEqual({ enabled: true });
   });
 });

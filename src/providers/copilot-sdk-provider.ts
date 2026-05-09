@@ -16,6 +16,8 @@ export type CopilotSdkProviderOptions = {
     provider?: ProviderConfig;
     gitHubToken?: string;
     infiniteSessions?: InfiniteSessionConfig;
+    configDir?: string;
+    workingDirectory?: string;
   };
 };
 
@@ -55,6 +57,8 @@ export class CopilotSdkProvider implements IntelligenceProvider {
       provider: this.options.sessionConfig.provider,
       gitHubToken: this.options.sessionConfig.gitHubToken,
       infiniteSessions: this.options.sessionConfig.infiniteSessions,
+      configDir: this.options.sessionConfig.configDir,
+      workingDirectory: this.options.sessionConfig.workingDirectory,
       onPermissionRequest: approveAll
     })) as CopilotSession;
 

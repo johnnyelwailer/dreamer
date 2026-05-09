@@ -19,8 +19,11 @@ It uses the official GitHub Copilot SDK runtime and supports multiple provider/a
 - `pnpm dev setup init`: inspect provider/integration setup and referenced env vars.
 - `pnpm dev setup init --write-env`: append missing provider env placeholders to `.env.local`.
 - `pnpm dev setup doctor`: run configuration and integration diagnostics.
-- `pnpm dev metrics`: print latest pipeline metrics summary.
-- `pnpm dev observability`: inspect observability artifact health and latest run metadata.
+- `pnpm dev metrics`: print numeric run counters from `reports/metrics.json`.
+- `pnpm dev status`: inspect report file health and latest run metadata.
+- `pnpm dev inspect memories`: inspect individual memory records.
+- `pnpm dev inspect contradictions`: inspect contradictory memories.
+- `pnpm dev inspect insights`: inspect latest run/eval insights from generated artifacts.
 - `pnpm eval:copilot-sdk`: run provider response eval cases.
 - `pnpm eval:dream-quality`: run quality eval against generated dream artifacts.
 - `pnpm eval:dream-quality:tool`: run quality eval using Copilot SDK tool-contract judge.

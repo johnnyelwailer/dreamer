@@ -89,6 +89,38 @@ describe("discoverCopilotDebugSessionDir", () => {
 
     expect(actual).toBe(expected);
   });
+
+  it("prefers a transcript-rich session over a newer trivial session", () => {
+    const home = makeTempHome();
+    const newerEmpty = createSessionDir({
+      home,
+      base: join("Library", "Application Support", "Code - Insiders", "User", "workspaceStorage"),
+      workspaceId: "workspace-a",
+      sessionId: "session-empty",
+      mtimeMs: 3000
+    });
+    const richer = createSessionDir({
+      home,
+      base: join("Library", "Application Support", "Code - Insiders", "User", "workspaceStorage"),
+      workspaceId: "workspace-b",
+      sessionId: "session-rich",
+      mtimeMs: 2000,
+      transcriptLines: [
+        JSON.stringify({ type: "user.message", data: { content: "Need a real transcript" } }),
+        JSON.stringify({ type: "assistant.message", data: { content: "Working through repo flow" } }),
+        JSON.stringify({ type: "tool.execution_start", data: { toolName: "read_file" } })
+      ]
+    });
+
+    const actual = discoverCopilotDebugSessionDir({
+      platform: "darwin",
+      homeDir: home,
+      env: {}
+    });
+
+    expect(actual).not.toBe(newerEmpty);
+    expect(actual).toBe(richer);
+  });
 });
 
 function makeTempHome(): string {
@@ -103,6 +135,7 @@ function createSessionDir(input: {
   workspaceId: string;
   sessionId: string;
   mtimeMs: number;
+  transcriptLines?: string[];
 }): string {
   const sessionDir = join(
     input.home,
@@ -115,6 +148,17 @@ function createSessionDir(input: {
   mkdirSync(sessionDir, { recursive: true });
   writeFileSync(join(sessionDir, "main.jsonl"), '{"type":"session_start"}\n', "utf8");
   writeFileSync(join(sessionDir, "models.json"), "[]", "utf8");
+  if (input.transcriptLines?.length) {
+    const transcriptsDir = join(
+      input.home,
+      input.base,
+      input.workspaceId,
+      "GitHub.copilot-chat",
+      "transcripts"
+    );
+    mkdirSync(transcriptsDir, { recursive: true });
+    writeFileSync(join(transcriptsDir, `${input.sessionId}.jsonl`), `${input.transcriptLines.join("\n")}\n`, "utf8");
+  }
   const d = new Date(input.mtimeMs);
   utimesSync(join(sessionDir, "main.jsonl"), d, d);
   return sessionDir;

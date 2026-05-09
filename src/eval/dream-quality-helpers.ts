@@ -2,13 +2,11 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DreamQualityRubricConfig } from "../dream/runtime-manifest.js";
 import type { DreamQualityReport } from "./dream-quality.js";
-
 type JudgeScore = {
   id: string;
   score: number;
   rationale: string;
 };
-
 type JudgeResponse = {
   scores: JudgeScore[];
   strengths: string[];
@@ -16,14 +14,30 @@ type JudgeResponse = {
   improvements: string[];
   parseError?: string;
 };
-
 function stripCodeFence(text: string): string {
   const match = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   return match?.[1]?.trim() ?? text.trim();
 }
+function extractJsonCandidate(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
 
+  const firstObject = trimmed.indexOf("{");
+  const lastObject = trimmed.lastIndexOf("}");
+  if (firstObject >= 0 && lastObject > firstObject) {
+    return trimmed.slice(firstObject, lastObject + 1);
+  }
+
+  const firstArray = trimmed.indexOf("[");
+  const lastArray = trimmed.lastIndexOf("]");
+  if (firstArray >= 0 && lastArray > firstArray) {
+    return trimmed.slice(firstArray, lastArray + 1);
+  }
+
+  return trimmed;
+}
 function parseJudgeResponse(raw: string): JudgeResponse {
-  const cleaned = stripCodeFence(raw);
+  const cleaned = extractJsonCandidate(stripCodeFence(raw));
   let parsed: Partial<JudgeResponse> = {};
   let parseError: string | undefined;
   try {
@@ -93,8 +107,7 @@ export function buildRubricText(rubric: DreamQualityRubricConfig): string {
 }
 
 export function buildBundleText(items: Array<{ path: string; content: string }>): string {
-  if (!items.length) return "- none";
-  return items.map((item) => [`# ${item.path}`, item.content].join("\n")).join("\n\n");
+  return !items.length ? "- none" : items.map((item) => [`# ${item.path}`, item.content].join("\n")).join("\n\n");
 }
 
 export function scoreReport(

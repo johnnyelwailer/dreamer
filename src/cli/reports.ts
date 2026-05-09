@@ -37,7 +37,7 @@ export async function runMetricsSummary(workspaceDir: string): Promise<void> {
 export async function runObservabilitySummary(workspaceDir: string): Promise<void> {
   const artifacts = ["dream-diary.md", "governance.json", "metrics.json", "pipeline-log.json"];
 
-  console.log("Observability artifacts");
+  console.log("Status: report artifacts");
   let missing = 0;
   for (const name of artifacts) {
     const path = join(workspaceDir, "reports", name);

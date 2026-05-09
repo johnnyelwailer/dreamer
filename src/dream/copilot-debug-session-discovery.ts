@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -36,7 +36,7 @@ export function discoverCopilotDebugSessionDir(
   const roots = [...(options.mode === "override" ? configured : [...defaults, ...configured])]
     .filter((path, index, values) => values.indexOf(path) === index)
     .filter(deps.exists);
-  const sessions: Array<{ path: string; mtimeMs: number }> = [];
+  const sessions: Array<{ path: string; mtimeMs: number; richnessScore: number }> = [];
 
   for (const root of roots) {
     const workspaces = deps.readdir(root);
@@ -47,13 +47,46 @@ export function discoverCopilotDebugSessionDir(
         const sessionDir = join(debugLogsRoot, sessionId);
         const mainJsonl = join(sessionDir, "main.jsonl");
         if (!deps.exists(mainJsonl)) continue;
-        sessions.push({ path: sessionDir, mtimeMs: deps.mtimeMs(mainJsonl) });
+        sessions.push({
+          path: sessionDir,
+          mtimeMs: deps.mtimeMs(mainJsonl),
+          richnessScore: scoreTranscriptRichness(sessionDir)
+        });
       }
     }
   }
 
-  sessions.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  sessions.sort((a, b) => b.richnessScore - a.richnessScore || b.mtimeMs - a.mtimeMs);
   return sessions[0]?.path;
+}
+
+function scoreTranscriptRichness(sessionDir: string): number {
+  const transcriptPath = join(sessionDir, "..", "..", "transcripts", `${sessionDir.split("/").pop()}.jsonl`);
+  if (!existsSync(transcriptPath)) return 0;
+
+  try {
+    let messageCount = 0;
+    let toolCount = 0;
+    let lineCount = 0;
+    let substantiveMessageCount = 0;
+    let noisyMessageCount = 0;
+    for (const line of readFileSync(transcriptPath, "utf8").split("\n")) {
+      if (!line.trim()) continue;
+      lineCount += 1;
+      const parsed = JSON.parse(line) as { type?: string; data?: { content?: string } };
+      if (parsed.type === "user.message" || parsed.type === "assistant.message") {
+        messageCount += 1;
+        const content = parsed.data?.content?.trim() ?? "";
+        const isNoisy = content.startsWith("[") || /notification:|waiting for input|command completed/i.test(content);
+        if (isNoisy) noisyMessageCount += 1;
+        if (content.length >= 40 && !isNoisy) substantiveMessageCount += 1;
+      }
+      if (parsed.type?.startsWith("tool.")) toolCount += 1;
+    }
+    return substantiveMessageCount * 1000 + messageCount * 50 + toolCount * 5 + lineCount - noisyMessageCount * 200;
+  } catch {
+    return 0;
+  }
 }
 
 function workspaceStorageRoots(

@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { ProviderConfig } from "@github/copilot-sdk";
 import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provider.js";
 import type { RuntimeManifest } from "./runtime-manifest.js";
@@ -44,7 +45,11 @@ function buildSessionProviderConfig(runtime: RuntimeManifest): ProviderConfig | 
   return provider;
 }
 
-export function buildCopilotSdkProviderOptions(runtime: RuntimeManifest, model: string): CopilotSdkProviderOptions {
+export function buildCopilotSdkProviderOptions(
+  runtime: RuntimeManifest,
+  model: string,
+  workspaceDir: string
+): CopilotSdkProviderOptions {
   const sdk = runtime.provider.sdk;
   const clientOptions: CopilotSdkProviderOptions["clientOptions"] = {
     useLoggedInUser: sdk.authMode === "logged-in-user",
@@ -60,7 +65,9 @@ export function buildCopilotSdkProviderOptions(runtime: RuntimeManifest, model: 
 
   const sessionConfig: CopilotSdkProviderOptions["sessionConfig"] = {
     provider: buildSessionProviderConfig(runtime),
-    infiniteSessions: { enabled: runtime.provider.sdk.infiniteSessionsEnabled ?? false }
+    infiniteSessions: { enabled: runtime.provider.sdk.infiniteSessionsEnabled ?? false },
+    workingDirectory: workspaceDir,
+    configDir: process.env.DREAM_COPILOT_SDK_CONFIG_DIR ?? join(workspaceDir, ".dreamer", "copilot-sdk")
   };
   if (sdk.authMode === "session-github-token") {
     sessionConfig.gitHubToken = readEnvValue(sdk.sessionGitHubTokenEnvVar);

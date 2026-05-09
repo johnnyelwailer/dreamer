@@ -1,54 +1,20 @@
-import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { DreamConfig } from "../dream/config.js";
-
-type FilePreview = {
-  path: string;
-  exists: boolean;
-  sizeBytes?: number;
-  lineCount?: number;
-  head?: string[];
-  tail?: string[];
-};
-
-async function previewFile(path: string, maxLines = 6): Promise<FilePreview> {
-  try {
-    const [raw, info] = await Promise.all([readFile(path, "utf8"), stat(path)]);
-    const lines = raw.split("\n");
-    return {
-      path,
-      exists: true,
-      sizeBytes: info.size,
-      lineCount: lines.length,
-      head: lines.slice(0, maxLines),
-      tail: lines.slice(Math.max(0, lines.length - maxLines))
-    };
-  } catch {
-    return { path, exists: false };
-  }
-}
-
-async function countMemoryRecords(path: string): Promise<number | null> {
-  try {
-    const raw = await readFile(path, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) return parsed.length;
-    if (parsed && typeof parsed === "object") {
-      const record = parsed as Record<string, unknown>;
-      if (Array.isArray(record.records)) return record.records.length;
-      if (Array.isArray(record.memory)) return record.memory.length;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+import {
+  previewFile,
+  countMemoryRecords,
+  readMemoryStatements,
+  readProviderSummaryPreview,
+  summarizeCopilotTranscript,
+  type FilePreview
+} from "./dream-quality-diagnostics-helpers.js";
 
 async function buildTranscriptPreviews(config: DreamConfig): Promise<FilePreview[]> {
   if (config.adapterId === "adapter.copilot.debug") {
     return Promise.all([
       previewFile(join(config.copilotDebugSessionDir, "main.jsonl")),
-      previewFile(join(config.copilotDebugSessionDir, "models.json"))
+      previewFile(join(config.copilotDebugSessionDir, "models.json")),
+      previewFile(join(config.copilotDebugSessionDir, "..", "..", "transcripts", `${basename(config.copilotDebugSessionDir)}.jsonl`), 12)
     ]);
   }
 
@@ -65,17 +31,33 @@ export async function buildDreamQualityDiagnostics(workspaceDir: string, config:
   const fileMemoryPath = join(workspaceDir, ".dreamer", "memory.json");
   const copilotMemoryPath = config.copilotMemoryPath;
   const honchoMemoryPath = config.honchoExportPath;
+  const pipelineLogPath = join(workspaceDir, "reports", "pipeline-log.json");
 
-  const [transcriptPreviews, dreamDiary, governance, metrics, pipelineLog, fileMemCount, copilotMemCount, honchoMemCount] =
+  const [
+    transcriptPreviews,
+    transcriptSummary,
+    dreamDiary,
+    governance,
+    metrics,
+    pipelineLog,
+    fileMemCount,
+    copilotMemCount,
+    honchoMemCount,
+    memoryStatements,
+    providerSummaryPreview
+  ] =
     await Promise.all([
       buildTranscriptPreviews(config),
+      config.adapterId === "adapter.copilot.debug" ? summarizeCopilotTranscript(config.copilotDebugSessionDir) : undefined,
       previewFile(join(workspaceDir, "reports", "dream-diary.md"), 20),
       previewFile(join(workspaceDir, "reports", "governance.json"), 40),
       previewFile(join(workspaceDir, "reports", "metrics.json"), 40),
-      previewFile(join(workspaceDir, "reports", "pipeline-log.json"), 40),
+      previewFile(pipelineLogPath, 40),
       countMemoryRecords(fileMemoryPath),
       countMemoryRecords(copilotMemoryPath),
-      countMemoryRecords(honchoMemoryPath)
+      countMemoryRecords(honchoMemoryPath),
+      readMemoryStatements([copilotMemoryPath, fileMemoryPath, honchoMemoryPath]),
+      readProviderSummaryPreview(pipelineLogPath)
     ]);
 
   return {
@@ -86,6 +68,11 @@ export async function buildDreamQualityDiagnostics(workspaceDir: string, config:
       model: config.copilotSdkModel
     },
     transcriptSources: transcriptPreviews,
+    transcriptSummary,
+    derivedConclusions: {
+      memoryStatements,
+      providerSummaryPreview
+    },
     memoryOutputs: [
       { path: fileMemoryPath, records: fileMemCount },
       { path: copilotMemoryPath, records: copilotMemCount },
