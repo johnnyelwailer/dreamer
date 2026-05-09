@@ -1,6 +1,8 @@
-import { appendFile, readFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { runtimeManifestPath } from "../dream/runtime-manifest.js";
+import { resolveAssetPath } from "../dream/dreamer-home.js";
 import { buildEnvSnapshot, collectProviderEnvVarNames, envValueSource } from "./env.js";
 import { pathExists } from "./shared.js";
 
@@ -10,9 +12,17 @@ export async function runSetupInit(workspaceDir: string, writeEnv: boolean): Pro
   const envSnapshot = await buildEnvSnapshot(workspaceDir);
   const envPath = join(workspaceDir, ".env.local");
 
+  // Bootstrap runtime.json from bundled defaults if missing
+  if (!(await pathExists(runtimePath))) {
+    await mkdir(join(runtimePath, ".."), { recursive: true });
+    const defaultConfig = readFileSync(resolveAssetPath("runtime.json"), "utf8");
+    await writeFile(runtimePath, defaultConfig, "utf8");
+    console.log(`Created runtime config at ${runtimePath}`);
+  }
+
   console.log("Setup summary");
-  console.log(`- runtime manifest: ${relative(workspaceDir, runtimePath)}`);
-  console.log(`- env file: ${relative(workspaceDir, envPath)} (${(await pathExists(envPath)) ? "present" : "missing"})`);
+  console.log(`- runtime config: ${runtimePath}`);
+  console.log(`- env file: ${envPath} (${(await pathExists(envPath)) ? "present" : "missing"})`);
   console.log(`- provider env vars referenced: ${envNames.length}`);
 
   for (const name of envNames) {
@@ -48,5 +58,5 @@ export async function runSetupInit(workspaceDir: string, writeEnv: boolean): Pro
 
   const block = ["", "# Added by dreamer setup init", ...missing.map((name) => `${name}=`)].join("\n");
   await appendFile(envPath, block, "utf8");
-  console.log(`\nAppended ${missing.length} placeholder entries to ${relative(workspaceDir, envPath)}.`);
+  console.log(`\nAppended ${missing.length} placeholder entries to ${envPath}.`);
 }

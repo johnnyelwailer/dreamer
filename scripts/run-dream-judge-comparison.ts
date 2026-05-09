@@ -206,7 +206,7 @@ function conciseMarkdown(report: QualityReport): string {
 }
 
 async function main(): Promise<void> {
-  const workspaceDir = process.cwd();
+  const workspaceDir = process.env.DREAMER_WORKSPACE_DIR ?? process.cwd();
 
   const result = await runDreamQualityEval(workspaceDir, {
     runDreamCycle: true,

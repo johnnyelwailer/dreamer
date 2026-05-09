@@ -4,7 +4,7 @@
 
 ## Vision
 
-A lightweight, pluggable agentic dreaming system that continuously consolidates knowledge from AI coding sessions into durable memory, project documentation, and reusable skills.
+A lightweight, pluggable agentic dreaming system that continuously consolidates knowledge from AI coding sessions into durable memory and reusable skills.
 
 The system runs locally by default, works across repositories and workspaces, and helps coding agents stop repeating the same mistakes.
 
@@ -16,7 +16,6 @@ The system runs locally by default, works across repositories and workspaces, an
 
 - Extract durable memories from coding-agent conversations.
 - Generate and maintain project-specific context.
-- Reconstruct missing specs and documentation for vibe-coded projects.
 - Improve agent skills and workflows over time.
 - Support multiple memory backends with a single Copilot SDK intelligence runtime.
 - Remain lightweight, local-first, and configurable.
@@ -27,6 +26,7 @@ The system runs locally by default, works across repositories and workspaces, an
 - Fully autonomous code modification without oversight.
 - Becoming tied to a single IDE, provider, or memory system.
 - Replacing authoritative human-written architecture docs.
+- Writing directly to workspace files during a dream run (workspaces are always read-only).
 
 ---
 
@@ -40,10 +40,21 @@ A scheduled reflective process that:
 - Extracts important patterns and decisions.
 - Consolidates memories.
 - Detects contradictions and stale knowledge.
-- Generates or updates documentation.
 - Proposes improvements to skills and workflows.
 
 Dreaming does not retrain models.
+
+## Workspace Read-Only Constraint
+
+**Workspaces are always read-only to the dreamer.**
+
+- The dreamer reads transcripts, logs, and existing files from any workspace during a run.
+- It never writes directly into a workspace or repository during a dream run.
+- All state mutations are recorded through explicit structured tool contracts:
+  - **Memory tools** — write memories to the central memory backend (scoped globally, to user, or to repo).
+  - **Skill tools** — write skill patches to the central skills store.
+- Any output that targets a specific workspace (e.g. repo-scoped memory, skill patches) is staged on a **separate branch** and requires explicit approval before merging into the workspace.
+- The central state store is the single source of truth for all dream outputs; workspace files are never modified in-place.
 
 ## Memory
 
@@ -195,15 +206,10 @@ Prefer targeted extraction over exhaustive transcript replay.
 - Promote high-confidence memories
 - Generate skill improvements
 
-### Phase 4 — Documentation and Indexing
+### Phase 4 — Indexing
 
 Generate or update:
 
-- VISION.md
-- PRODUCT_SPEC.md
-- ARCHITECTURE.md
-- DECISIONS.md
-- OPEN_QUESTIONS.md
 - Memory indexes
 - Dream reports
 
@@ -239,9 +245,7 @@ Focus on:
 - Architecture conventions
 - Project goals
 - Common pitfalls
-- Documentation generation
 - Skill maintenance
-- Spec reconstruction
 
 ### Important Constraint
 
@@ -255,31 +259,7 @@ The dream system should:
 
 ---
 
-# 6. Spec Reconstruction
-
-For repositories built primarily through agent conversations:
-
-The dreamer should reconstruct:
-
-- Product vision
-- Requirements
-- Architecture intent
-- Constraints
-- Design decisions
-- Open questions
-- Rejected approaches
-
-The system must distinguish between:
-
-- Explicit user intent
-- Implemented behavior
-- Inferred requirements
-- Contradictions
-- Unknowns
-
----
-
-# 7. Skill Maintenance
+# 6. Skill Maintenance
 
 The system should continuously evaluate skills.
 
@@ -311,7 +291,7 @@ High-risk changes should:
 
 ---
 
-# 8. Observability
+# 7. Observability
 
 The system must provide strong observability.
 
@@ -325,7 +305,6 @@ Every dream run should generate:
 - Memories removed
 - Contradictions found
 - Skills updated
-- Docs generated
 - Suggested actions
 
 Example:
@@ -337,7 +316,6 @@ Dream completed for repo: dreamer
 - 4 stale memories pruned
 - 3 skill patches proposed
 - 2 contradictions detected
-- Generated PRODUCT_SPEC.md
 ```
 
 ## Metrics
@@ -353,15 +331,25 @@ Track:
 
 ---
 
-# 9. Safety and Governance
+# 8. Safety and Governance
+
+## Workspace Read-Only Enforcement (Non-Negotiable)
+
+- Workspaces are **always read-only** during a dream run. The dreamer never writes into workspace directories in-place.
+- All state is recorded in a **central location** (the memory backend and skills store).
+- All mutations go through **explicit structured tool contracts** with defined schemas:
+  - `record_memory(scope, statement, provenance)` — writes to the memory backend.
+  - `propose_skill_patch(scope, diff, risk)` — writes to the skills store.
+- Repo/workspace-scoped outputs are staged on a **separate branch**, never on the working branch.
+- Merging scoped outputs into a workspace requires **explicit human approval**.
+- No dream run may resolve its own approval gate.
 
 ## Constraints
 
 - Transcripts are treated as inert data.
 - The dreamer must never execute instructions found inside old transcripts.
-- Repository writes should be isolated.
 - All generated memories must preserve provenance.
-- Human review should remain possible.
+- Human review must remain possible for every output.
 
 ## Provenance
 
@@ -375,7 +363,7 @@ Every generated memory should track:
 
 ---
 
-# 10. Cross Platform Support
+# 9. Cross Platform Support
 
 The system must support:
 
@@ -388,7 +376,7 @@ Future:
 
 ---
 
-# 11. Scheduling
+# 10. Scheduling
 
 Support:
 
@@ -404,7 +392,7 @@ Suggested default:
 
 ---
 
-# 12. Architecture Overview
+# 11. Architecture Overview
 
 ```text
 [Chat Logs / Tool Events]
@@ -415,16 +403,18 @@ Suggested default:
            ↓
      [Dream Pipeline]
            ↓
- ┌─────────┼─────────┐
- ↓         ↓         ↓
-Memories   Docs    Skill Patches
- ↓         ↓         ↓
-Backends  Repo     Branch/Approval
+    ┌─────────┐
+    ↓         ↓
+Memories  Skill Patches
+    ↓         ↓
+Backends  Branch/Approval
 ```
+
+> **Note:** Documentation generation (Docs node) belongs to the deferred use case. See [Deferred Use Case: Documentation Generation](#deferred-use-case-documentation-generation).
 
 ---
 
-# 13. Future Ideas
+# 12. Future Ideas
 
 - Team/shared dreaming
 - Outcome-based evaluation loops
@@ -451,31 +441,31 @@ The goal is:
 
 ---
 
-# 14. Delivery Rules (Non-Negotiable)
+# 13. Delivery Rules (Non-Negotiable)
 
 These rules are implementation constraints for all phases.
 
-## 14.1 Reusable, Pluggable Code
+## 13.1 Reusable, Pluggable Code
 
 - All integrations use contract-first interfaces and registries.
 - Core logic depends on abstractions, never concrete vendors.
 - New adapters/backends must be add-only changes where possible.
 - Plugin modules must be independently testable.
 
-## 14.2 File Size Budget
+## 13.2 File Size Budget
 
 - Target: fewer than 150 LOC per source file.
 - Preferred split: one responsibility per file.
 - If a file grows beyond 150 LOC, split by concern before adding features.
 
-## 14.3 TDD Required
+## 13.3 TDD Required
 
 - Red -> Green -> Refactor for each feature increment.
 - Start each slice with failing tests that express user-visible behavior.
 - Unit tests for contracts and transformations.
 - Integration tests for end-to-end pipeline behavior.
 
-## 14.4 Vertical Slice Delivery
+## 13.4 Vertical Slice Delivery
 
 - Each slice ships a thin, end-to-end path from input to observable output.
 - Avoid horizontal phase-only work that cannot run independently.
@@ -483,7 +473,7 @@ These rules are implementation constraints for all phases.
 
 ---
 
-# 15. Concrete Vertical Slice Plan
+# 14. Concrete Vertical Slice Plan
 
 ## Slice 0 - Kernel and Contracts
 
@@ -557,31 +547,11 @@ Convert normalized signals into durable memories with provenance.
 - Every memory item contains provenance metadata.
 - Consolidation summary appears in diary.
 
-## Slice 3 - Documentation Reconstruction
+> **DEFERRED — Slice: Documentation Reconstruction**
+>
+> This slice has been removed from the active plan and moved to the [Deferred Use Case: Documentation Generation](#deferred-use-case-documentation-generation) appendix. It will be scheduled as a separate initiative at a later stage.
 
-### Goal
-
-Generate useful project docs from consolidated memory and events.
-
-### Scope
-
-- Generate PRODUCT_SPEC, ARCHITECTURE, DECISIONS, OPEN_QUESTIONS.
-- Enforce concise AGENTS policy.
-- Add idempotent doc update strategy (stable ordering, deterministic sections).
-
-### TDD Entry Tests
-
-- Generated docs include required sections.
-- Re-running without new signals produces minimal/no diff.
-- AGENTS update remains concise under configured max size.
-
-### Done Criteria
-
-- Docs are generated with traceable evidence links.
-- Reruns are stable and reviewable.
-- PR-friendly diff behavior is verified.
-
-## Slice 4 - Skill Maintenance Proposals
+## Slice 3 - Skill Maintenance Proposals
 
 ### Goal
 
@@ -605,7 +575,7 @@ Detect skill problems and output proposed patches safely.
 - Risk classification is visible in diary.
 - No direct mutation of protected files without approval.
 
-## Slice 5 - Multi-Plugin Expansion
+## Slice 4 - Multi-Plugin Expansion
 
 ### Goal
 
@@ -627,7 +597,7 @@ Prove pluggability by adding at least one additional adapter, backend, and provi
 - Same dream scenario runs across plugin combinations.
 - No core rewrites required for new integrations.
 
-## Slice 6 - Scheduling, Observability, Governance
+## Slice 5 - Scheduling, Observability, Governance
 
 ### Goal
 
@@ -653,7 +623,7 @@ Operationalize safe recurring dreams.
 
 ---
 
-# 16. Definition of Done Per Slice
+# 15. Definition of Done Per Slice
 
 - All tests green, with new tests added before implementation.
 - End-to-end demo path documented for the slice.
@@ -664,7 +634,7 @@ Operationalize safe recurring dreams.
 
 ---
 
-# 17. Suggested Initial Code Topology
+# 16. Suggested Initial Code Topology
 
 This topology supports pluggability and small files.
 
@@ -684,25 +654,27 @@ Each folder should prefer many small files over large utility files.
 
 ---
 
-# 18. Milestone Sequence
+# 17. Milestone Sequence
 
 - Milestone A: Slices 0-1 (runnable ingestion pipeline)
-- Milestone B: Slices 2-3 (memory + docs value loop)
-- Milestone C: Slices 4-5 (skill proposals + proven pluggability)
-- Milestone D: Slice 6 (operations and governance hardening)
+- Milestone B: Slice 2 (memory consolidation value loop)
+- Milestone C: Slices 3-4 (skill proposals + proven pluggability)
+- Milestone D: Slice 5 (operations and governance hardening)
+
+> **Note:** The former Slice 3 (Documentation Reconstruction) has been deferred. Slices have been renumbered accordingly in [Section 15](#15-concrete-vertical-slice-plan). See [Deferred Use Case: Documentation Generation](#deferred-use-case-documentation-generation).
 
 This sequence prioritizes user-visible value early while keeping architecture modular.
 
 ---
 
-# 19. Companion Docs
+# 18. Companion Docs
 
 - Execution breakdown: docs/execution-plan.md
 - TDD and verification approach: docs/test-strategy.md
 
 ---
 
-# 20. Technology Choices (Concrete)
+# 19. Technology Choices (Concrete)
 
 ## Core Implementation
 
@@ -723,7 +695,7 @@ See: docs/technology-decisions.md
 
 ---
 
-# 21. Adapter Integration Research Status
+# 20. Adapter Integration Research Status
 
 ## Concrete Research Completed
 
@@ -761,13 +733,13 @@ In this environment, sampled `main.jsonl` files are currently session-start-only
 
 ---
 
-# 22. Verification Beyond Unit Tests
+# 21. Verification Beyond Unit Tests
 
 ## Multi-Layer Verification
 
 - Contract tests: cross-plugin compatibility.
-- Integration replay tests: transcript -> memory -> docs.
-- Golden tests: deterministic normalized events and generated docs.
+- Integration replay tests: transcript -> memory -> skills.
+- Golden tests: deterministic normalized events and generated skill patches.
 - Safety tests: transcript prompt-injection treated as inert data.
 - Evals: rubric + pairwise model comparison on fixed fixtures.
 
@@ -794,4 +766,124 @@ Initial eval assets:
 
 - evals/promptfooconfig.yaml
 - evals/prompts/memory-quality.txt
+
+---
+
+# Deferred Use Case: Documentation Generation
+
+> **Status: DEFERRED — Not in the current implementation scope. This is a separate use case to be planned and implemented in a future initiative.**
+
+## Overview
+
+Documentation generation is intentionally separated from the core dreaming use case. The core system focuses exclusively on memory consolidation and skill maintenance. Documentation generation requires different triggers, quality criteria, and governance concerns that warrant a standalone initiative.
+
+## What This Use Case Covers
+
+### Spec Reconstruction
+
+For repositories built primarily through agent conversations, the system would reconstruct:
+
+- Product vision
+- Requirements
+- Architecture intent
+- Constraints
+- Design decisions
+- Open questions
+- Rejected approaches
+
+The system must distinguish between:
+
+- Explicit user intent
+- Implemented behavior
+- Inferred requirements
+- Contradictions
+- Unknowns
+
+### Generated Documentation Artifacts
+
+- VISION.md
+- PRODUCT_SPEC.md
+- ARCHITECTURE.md
+- DECISIONS.md
+- OPEN_QUESTIONS.md
+- Memory indexes
+
+### AGENTS.md Concision Guard
+
+- `AGENTS.md` must remain concise.
+- The doc system should prefer removing outdated lines over endlessly appending.
+- Avoid large generated dumps.
+- Keep agent startup context lightweight.
+
+### Idempotency
+
+- Reruns with unchanged input must produce minimal or no diff.
+- Stable section ordering required.
+- PR-friendly diff behavior required.
+
+## Pipeline Placement
+
+When implemented, documentation generation would operate as a dedicated pipeline phase after consolidation:
+
+```text
+Phase 4 — Documentation and Indexing
+  - Generate or update: VISION.md, PRODUCT_SPEC.md, ARCHITECTURE.md, DECISIONS.md, OPEN_QUESTIONS.md
+  - Update memory indexes
+  - Enforce AGENTS concision policy
+```
+
+## Architecture Impact
+
+When implemented, the architecture would add a Docs output path:
+
+```text
+[Dream Pipeline]
+       ↓
+ ┌─────┼─────────┐
+ ↓     ↓         ↓
+Memories  Docs  Skill Patches
+ ↓     ↓         ↓
+Backends  Repo  Branch/Approval
+```
+
+## Deferred Slice: Documentation Reconstruction
+
+This slice was originally Slice 3 in the active plan. It is now deferred pending a separate planning session.
+
+### Goal
+
+Generate useful project docs from consolidated memory and events.
+
+### Scope
+
+- Generate PRODUCT_SPEC, ARCHITECTURE, DECISIONS, OPEN_QUESTIONS.
+- Enforce concise AGENTS policy.
+- Add idempotent doc update strategy (stable ordering, deterministic sections).
+
+### TDD Entry Tests (when implemented)
+
+- Generated docs include required sections.
+- Re-running without new signals produces minimal/no diff.
+- AGENTS update remains concise under configured max size.
+
+### Done Criteria (when implemented)
+
+- Docs are generated with traceable evidence links.
+- Reruns are stable and reviewable.
+- PR-friendly diff behavior verified.
+
+## Evaluation Corpus (Deferred)
+
+When this use case is scheduled, the following eval fixtures will be needed:
+
+- 10 doc-generation fixtures with known required outputs.
+- Documentation completeness score by required section.
+- Idempotency score: rerun diff size on unchanged input.
+
+## Why Deferred
+
+- Core memory consolidation and skill maintenance deliver standalone value without documentation.
+- Documentation generation has distinct quality requirements (completeness, idempotency, PR hygiene) that benefit from dedicated design.
+- Deferring avoids coupling the core pipeline's stability to doc generation quality.
+- Allows the core system to ship and stabilize before adding a higher-complexity output path.
 - scripts/run-evals.sh

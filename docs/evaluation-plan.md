@@ -9,8 +9,8 @@
 ## Verification Layers
 
 - Contract tests: plugin compatibility across adapters/backends/providers.
-- Integration replay tests: transcript to memory to docs end-to-end.
-- Golden snapshot tests: deterministic normalized events and generated docs.
+- Integration replay tests: transcript to memory to skill patches end-to-end.
+- Golden snapshot tests: deterministic normalized events and generated skill patches.
 - Regression tests: every production bug gets a fixed fixture.
 - LLM evals: quality scoring and pairwise model comparison.
 
@@ -18,7 +18,6 @@
 
 - Memory precision and recall against labeled fixtures.
 - Contradiction detection precision and recall.
-- Documentation completeness score by required sections.
 - Idempotency score: rerun diff size on unchanged input.
 - Cost and latency per dream run.
 
@@ -40,7 +39,7 @@
 
 ### Eval Types
 
-- Rubric grading for memory usefulness and doc usefulness.
+- Rubric grading for memory usefulness.
 - Structured assertions on required fields and provenance.
 - Pairwise win-rate between provider outputs for same fixture.
 - Stability checks across repeated runs with fixed seed.
@@ -62,7 +61,6 @@
 
 - 20 ingestion fixtures from real Copilot session formats.
 - 20 consolidation fixtures with duplicates and contradictions.
-- 10 doc-generation fixtures with known required outputs.
 - 10 safety fixtures containing malicious transcript content.
 
 ## Pass Gates

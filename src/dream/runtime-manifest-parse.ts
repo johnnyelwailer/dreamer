@@ -1,8 +1,14 @@
 import type { RuntimeManifest } from "./runtime-manifest-types.js";
 import { parseByokConfig } from "./runtime-manifest-byok-parse.js";
+import { resolveAssetPath } from "./dreamer-home.js";
 function asString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim().length === 0) throw new Error(`Invalid runtime manifest field: ${field}`);
   return value;
+}
+
+function asStringOrDefault(value: unknown, defaultValue: string, field: string): string {
+  if (value === undefined || value === null) return defaultValue;
+  return asString(value, field);
 }
 
 function asStringOrUndefined(value: unknown, field: string): string | undefined {
@@ -109,19 +115,19 @@ export function parseRuntimeManifestObject(parsed: unknown): RuntimeManifest {
     docs: {
       outputRootPath: asString(docs.outputRootPath, "docs.outputRootPath"),
       fallbackOutputPath: asString(docs.fallbackOutputPath, "docs.fallbackOutputPath"),
-      promptTemplatePath: asString(docs.promptTemplatePath, "docs.promptTemplatePath"),
-      improvementHintsPath: asString(docs.improvementHintsPath, "docs.improvementHintsPath"),
+      promptTemplatePath: asStringOrDefault(docs.promptTemplatePath, resolveAssetPath("prompts/docs-generation.md"), "docs.promptTemplatePath"),
+      improvementHintsPath: asStringOrDefault(docs.improvementHintsPath, resolveAssetPath("prompts/docs-improvement-hints.md"), "docs.improvementHintsPath"),
       maxSignals: asPositiveInteger(docs.maxSignals, "docs.maxSignals"),
       maxMemories: asPositiveInteger(docs.maxMemories, "docs.maxMemories"),
       maxEvents: asPositiveInteger(docs.maxEvents, "docs.maxEvents")
     },
     eval: {
-      casesPath: asString(evalConfig.casesPath, "eval.casesPath"),
+      casesPath: asStringOrDefault(evalConfig.casesPath, resolveAssetPath("evals/copilot-sdk-cases.json"), "eval.casesPath"),
       reportPath: asString(evalConfig.reportPath, "eval.reportPath"),
       requestTimeoutMs: asPositiveInteger(evalConfig.requestTimeoutMs, "eval.requestTimeoutMs"),
       maxAttempts: asPositiveInteger(evalConfig.maxAttempts, "eval.maxAttempts"),
       quality: {
-        rubricPath: asString(quality.rubricPath, "eval.quality.rubricPath"),
+        rubricPath: asStringOrDefault(quality.rubricPath, resolveAssetPath("evals/dream-quality-rubric.json"), "eval.quality.rubricPath"),
         reportPath: asString(quality.reportPath, "eval.quality.reportPath"),
         selfImproveReportPath: asString(quality.selfImproveReportPath, "eval.quality.selfImproveReportPath"),
         minPassingScore: asBoundedNumber(quality.minPassingScore, 0, 1, "eval.quality.minPassingScore"),

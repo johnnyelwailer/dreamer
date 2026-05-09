@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 export interface DailyTime {
   hour: number;
@@ -46,7 +47,7 @@ export function resolveSchedulePaths(workspaceDir: string): { nodePath: string; 
   return {
     nodePath: process.execPath,
     cliPath: join(workspaceDir, "src", "cli.ts"),
-    logPath: join(workspaceDir, ".dreamer", "logs", "schedule.log")
+    logPath: join(workspaceStorageDir(workspaceDir), "logs", "schedule.log")
   };
 }
 

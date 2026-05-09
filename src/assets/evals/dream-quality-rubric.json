@@ -1,5 +1,4 @@
 {
-  "judgePromptTemplatePath": ".dreamer/config/prompts/dream-quality-judge.md",
   "dimensions": [
     {
       "id": "signal_extraction",

@@ -103,11 +103,14 @@ function main(): void {
 
   run("git", ["worktree", "add", "-b", branch, worktreeDir, "HEAD"], workspaceDir);
 
+  // The dreamer runs from its own source dir (node_modules here). The worktree
+  // is just an isolated copy of the workspace files — passed via env var.
   const commandResult = spawnSync("zsh", ["-lc", options.command], {
-    cwd: worktreeDir,
+    cwd: workspaceDir,
     stdio: "inherit",
     env: {
       ...process.env,
+      DREAMER_WORKSPACE_DIR: worktreeDir,
       DREAMER_SAFE_WORKTREE: worktreeDir
     }
   });

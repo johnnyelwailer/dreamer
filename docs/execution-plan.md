@@ -7,13 +7,14 @@
 - TDD-first: write failing tests before implementation.
 - Deliver in vertical slices with end-to-end value.
 - Greenfield rule: do not preserve legacy behavior unless explicitly requested.
+- Workspaces are always read-only. All mutations go through explicit tool contracts to a central store.
 
 ## Milestones
 
 - Milestone A: Slices 0-1
-- Milestone B: Slices 2-3
-- Milestone C: Slices 4-5
-- Milestone D: Slice 6
+- Milestone B: Slice 2
+- Milestone C: Slices 3-4
+- Milestone D: Slice 5
 
 ## Slice Backlog
 
@@ -85,28 +86,15 @@
 - Contradictions are surfaced, not overwritten.
 - Provenance fields are always present.
 
-## Slice 3 - Documentation Reconstruction
+---
 
-### Deliverables
+> **DEFERRED — Slice: Documentation Reconstruction**
+>
+> This slice has been moved out of the active backlog. Documentation generation is a separate deferred use case. See the [Deferred Use Case: Documentation Generation](prd.md#deferred-use-case-documentation-generation) section in the PRD.
 
-- Generated PRODUCT_SPEC, ARCHITECTURE, DECISIONS, OPEN_QUESTIONS.
-- Idempotent doc write strategy.
-- AGENTS concision guard.
+---
 
-### Tasks
-
-- Build doc model from consolidated data.
-- Generate deterministic section ordering.
-- Add idempotency guard for no-change runs.
-- Add AGENTS size/verbosity checks.
-
-### Exit Checks
-
-- Re-run without new data produces minimal diff.
-- Generated docs include all required sections.
-- AGENTS remains concise by policy.
-
-## Slice 4 - Skill Maintenance Proposals
+## Slice 3 - Skill Maintenance Proposals
 
 ### Deliverables
 
@@ -127,7 +115,7 @@
 - High-risk proposals never auto-apply.
 - Diary includes proposal and risk summary.
 
-## Slice 5 - Multi-Plugin Expansion
+## Slice 4 - Multi-Plugin Expansion
 
 ### Deliverables
 
@@ -146,26 +134,32 @@
 - Core code unchanged for plugin expansion.
 - Contract suite passes for all plugin implementations.
 
-## Slice 6 - Scheduling, Observability, Governance
+## Slice 5 - Scheduling, Observability, Governance
 
 ### Deliverables
 
 - Manual and scheduled run modes.
 - Dream diary and metrics export.
-- Transcript safety and write isolation guards.
+- Workspace read-only enforcement and write isolation guards.
+- Explicit tool contract enforcement for all state mutations.
+- Separate-branch staging for all workspace-scoped outputs.
 
 ### Tasks
 
 - Add scheduler integration and config.
 - Add metrics collection and export format.
 - Add transcript inert-data enforcement checks.
-- Add repository isolation guard checks.
+- Implement `record_memory` and `propose_skill_patch` as the only mutation contracts; block any direct filesystem writes outside these contracts.
+- Add branch-staging guard for repo-scoped outputs.
+- Add approval-gate enforcement: no run may resolve its own approval.
 
 ### Exit Checks
 
 - Scheduled run works at configured interval.
 - Required diary fields are always present.
-- Unsafe action paths are blocked.
+- Direct workspace writes are blocked and produce an auditable error.
+- Scoped outputs land on a separate branch, not the working branch.
+- Approval gate cannot be bypassed by a dream run.
 
 ## Definition of Done
 

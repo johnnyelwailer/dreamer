@@ -40,13 +40,13 @@ describe("dream quality evidence", () => {
     expect(files[0]?.path).toBe(join("/tmp/ws/debug-logs/session-123", "..", "..", "transcripts", "session-123.jsonl"));
   });
 
-  it("builds evidence instructions with user-reaction and assistant-behavior focus", () => {
+  it("builds evidence instructions with memory vs transcript comparison focus", () => {
     const section = buildEvidenceToolingSection([
       { kind: "transcript", path: "/tmp/ws/transcripts/session-123.jsonl" }
     ]);
-    expect(section).toContain("use native tools to inspect");
-    expect(section).toContain("User reactions");
-    expect(section).toContain("Assistant behavior");
+    expect(section).toContain("use the tools to read them");
+    expect(section).toContain("transcript / event-log");
+    expect(section).toContain("memory-output");
     expect(section).toContain("/tmp/ws/transcripts/session-123.jsonl");
   });
 });

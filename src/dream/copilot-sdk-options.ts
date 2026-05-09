@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { ProviderConfig } from "@github/copilot-sdk";
 import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provider.js";
 import type { RuntimeManifest } from "./runtime-manifest.js";
+import { dreamerHome } from "./dreamer-home.js";
 
 function readEnvValue(primary?: string, fallback?: string): string | undefined {
   if (primary) {
@@ -67,7 +68,7 @@ export function buildCopilotSdkProviderOptions(
     provider: buildSessionProviderConfig(runtime),
     infiniteSessions: { enabled: runtime.provider.sdk.infiniteSessionsEnabled ?? false },
     workingDirectory: workspaceDir,
-    configDir: process.env.DREAM_COPILOT_SDK_CONFIG_DIR ?? join(workspaceDir, ".dreamer", "copilot-sdk")
+    configDir: process.env.DREAM_COPILOT_SDK_CONFIG_DIR ?? join(dreamerHome(), "copilot-sdk")
   };
   if (sdk.authMode === "session-github-token") {
     sessionConfig.gitHubToken = readEnvValue(sdk.sessionGitHubTokenEnvVar);

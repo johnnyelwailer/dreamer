@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DreamQualityRubricConfig } from "../dream/runtime-manifest.js";
 import type { DreamQualityReport } from "./dream-quality.js";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 type JudgeScore = {
   id: string;
   score: number;
@@ -87,17 +88,13 @@ export async function listMarkdownFiles(rootDir: string): Promise<string[]> {
 }
 
 export async function readArtifacts(workspaceDir: string): Promise<Array<{ path: string; content: string }>> {
-  const artifactPaths = [
-    "reports/dream-diary.md",
-    "reports/governance.json",
-    "reports/metrics.json",
-    "reports/pipeline-log.json",
-    ".dreamer/memory.json"
-  ];
+  const storageDir = workspaceStorageDir(workspaceDir);
+  const names = ["reports/dream-diary.md", "reports/governance.json", "reports/metrics.json", "reports/pipeline-log.json", "memory.json"];
   const artifacts: Array<{ path: string; content: string }> = [];
-  for (const artifactPath of artifactPaths) {
-    const content = await readFile(join(workspaceDir, artifactPath), "utf8").catch(() => "");
-    if (content.trim().length > 0) artifacts.push({ path: artifactPath, content: content.slice(0, 8000) });
+  for (const name of names) {
+    const fullPath = join(storageDir, name);
+    const content = await readFile(fullPath, "utf8").catch(() => "");
+    if (content.trim().length > 0) artifacts.push({ path: name, content: content.slice(0, 8000) });
   }
   return artifacts;
 }
@@ -142,7 +139,7 @@ export function scoreReport(
     strengths: parsed.strengths,
     weaknesses: parsed.weaknesses,
     improvements: parsed.improvements,
-    docsEvaluated: docs,
+    transcriptsEvaluated: docs,
     rawJudgeOutput: raw,
     judgeParseError: parsed.parseError
   };

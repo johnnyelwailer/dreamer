@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 export async function listMarkdownFiles(rootDir: string): Promise<string[]> {
   const files: string[] = [];
@@ -19,18 +20,19 @@ export async function listMarkdownFiles(rootDir: string): Promise<string[]> {
 }
 
 export async function readArtifacts(workspaceDir: string): Promise<Array<{ path: string; content: string }>> {
-  const artifactPaths = [
-    "reports/dream-diary.md",
-    "reports/governance.json",
-    "reports/metrics.json",
-    "reports/pipeline-log.json",
-    ".dreamer/memory.json",
-    ".dreamer/copilot-memory.json"
+  const storageDir = workspaceStorageDir(workspaceDir);
+  const artifactEntries = [
+    { label: "reports/dream-diary.md", fullPath: join(storageDir, "reports", "dream-diary.md") },
+    { label: "reports/governance.json", fullPath: join(storageDir, "reports", "governance.json") },
+    { label: "reports/metrics.json", fullPath: join(storageDir, "reports", "metrics.json") },
+    { label: "reports/pipeline-log.json", fullPath: join(storageDir, "reports", "pipeline-log.json") },
+    { label: "memory.json", fullPath: join(storageDir, "memory.json") },
+    { label: "copilot-memory.json", fullPath: join(storageDir, "copilot-memory.json") }
   ];
   const artifacts: Array<{ path: string; content: string }> = [];
-  for (const artifactPath of artifactPaths) {
-    const content = await readFile(join(workspaceDir, artifactPath), "utf8").catch(() => "");
-    if (content.trim().length > 0) artifacts.push({ path: artifactPath, content: content.slice(0, 8000) });
+  for (const { label, fullPath } of artifactEntries) {
+    const content = await readFile(fullPath, "utf8").catch(() => "");
+    if (content.trim().length > 0) artifacts.push({ path: label, content: content.slice(0, 8000) });
   }
   return artifacts;
 }

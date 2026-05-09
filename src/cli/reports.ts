@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { pathExists } from "./shared.js";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 type MetricsShape = {
   sessionsProcessed?: number;
@@ -31,9 +32,9 @@ type StateShape = {
 };
 
 export async function runMetricsSummary(workspaceDir: string): Promise<void> {
-  const metricsPath = join(workspaceDir, "reports", "metrics.json");
+  const metricsPath = join(workspaceStorageDir(workspaceDir), "reports", "metrics.json");
   if (!(await pathExists(metricsPath))) {
-    console.log("No metrics found at reports/metrics.json. Run a dream cycle first.");
+    console.log("No metrics found. Run a dream cycle first.");
     process.exitCode = 1;
     return;
   }
@@ -49,22 +50,23 @@ export async function runMetricsSummary(workspaceDir: string): Promise<void> {
 }
 
 export async function runObservabilitySummary(workspaceDir: string): Promise<void> {
+  const storageDir = workspaceStorageDir(workspaceDir);
   const artifacts = ["dream-diary.md", "governance.json", "metrics.json", "pipeline-log.json"];
 
   console.log("Status: report artifacts");
   let missing = 0;
   for (const name of artifacts) {
-    const path = join(workspaceDir, "reports", name);
+    const path = join(storageDir, "reports", name);
     if (!(await pathExists(path))) {
-      console.log(`- missing: ${relative(workspaceDir, path)}`);
+      console.log(`- missing: ${name}`);
       missing += 1;
       continue;
     }
     const info = await stat(path);
-    console.log(`- ${relative(workspaceDir, path)} (${info.size} bytes, updated ${info.mtime.toISOString()})`);
+    console.log(`- ${name} (${info.size} bytes, updated ${info.mtime.toISOString()})`);
   }
 
-  const pipelineLogPath = join(workspaceDir, "reports", "pipeline-log.json");
+  const pipelineLogPath = join(storageDir, "reports", "pipeline-log.json");
   if (await pathExists(pipelineLogPath)) {
     try {
       const parsed = JSON.parse(await readFile(pipelineLogPath, "utf8")) as PipelineLogShape;
@@ -74,11 +76,11 @@ export async function runObservabilitySummary(workspaceDir: string): Promise<voi
         if (parsed.generatedAt) console.log(`- generated at: ${parsed.generatedAt}`);
       }
     } catch {
-      console.log("\nCould not parse reports/pipeline-log.json.");
+      console.log("\nCould not parse pipeline-log.json.");
     }
   }
 
-  const statePath = join(workspaceDir, ".dreamer", "state.json");
+  const statePath = join(workspaceStorageDir(workspaceDir), "state.json");
   if (await pathExists(statePath)) {
     try {
       const state = JSON.parse(await readFile(statePath, "utf8")) as StateShape;
@@ -94,7 +96,7 @@ export async function runObservabilitySummary(workspaceDir: string): Promise<voi
       }
       if (state.lastRunAt) console.log(`- state updated: ${state.lastRunAt}`);
     } catch {
-      console.log("\nCould not parse .dreamer/state.json.");
+      console.log("\nCould not parse state.json.");
     }
   }
 

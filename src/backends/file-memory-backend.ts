@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 import type { MemoryBackend } from "../core/contracts.js";
 import type { MemoryRecord } from "../core/types.js";
 
@@ -8,7 +9,7 @@ export class FileMemoryBackend implements MemoryBackend {
   private readonly filePath: string;
 
   constructor(workspaceDir: string) {
-    this.filePath = join(workspaceDir, ".dreamer", "memory.json");
+    this.filePath = join(workspaceStorageDir(workspaceDir), "memory.json");
   }
 
   async load(): Promise<MemoryRecord[]> {

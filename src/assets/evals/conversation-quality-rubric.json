@@ -1,0 +1,24 @@
+{
+  "dimensions": [
+    {
+      "id": "signal_capture",
+      "description": "The most important user corrections, explicit preferences, and key decisions from the conversation were identified and extracted as memories.",
+      "weight": 0.35
+    },
+    {
+      "id": "memory_scoping",
+      "description": "Memories are correctly scoped: cross-project user preferences under scope=user, repository-specific patterns under scope=workspace. Misscoped or unscoped memories score low.",
+      "weight": 0.25
+    },
+    {
+      "id": "insight_precision",
+      "description": "Memory statements are concise, declarative, and insight-only. Raw transcript excerpts, verbose summaries, and tautological observations score low.",
+      "weight": 0.25
+    },
+    {
+      "id": "coverage",
+      "description": "The most impactful signals in the conversation were captured. Important patterns are not silently dropped. Repetitive minor detail omissions are acceptable.",
+      "weight": 0.15
+    }
+  ]
+}

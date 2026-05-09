@@ -2,12 +2,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PipelineStage } from "../core/contracts.js";
 import type { DreamContext } from "../core/types.js";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 export class ObservabilityStage implements PipelineStage {
   readonly id = "stage.observability";
 
   async run(context: DreamContext): Promise<DreamContext> {
-    const outDir = join(context.workspaceDir, "reports");
+    const outDir = join(workspaceStorageDir(context.workspaceDir), "reports");
     await mkdir(outDir, { recursive: true });
     const summary = [
       `Dream completed for repo: ${context.workspaceDir.split("/").pop() ?? "unknown"}`,

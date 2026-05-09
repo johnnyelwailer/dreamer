@@ -1,0 +1,59 @@
+{
+  "provider": {
+    "id": "provider.copilot.sdk",
+    "defaultModel": "gpt-4o",
+    "sdk": {
+      "authMode": "logged-in-user",
+      "providerMode": "copilot",
+      "requestTimeoutMs": 120000,
+      "infiniteSessionsEnabled": false,
+      "gitHubTokenEnvVar": "GITHUB_TOKEN",
+      "cliPathEnvVar": "COPILOT_SDK_CLI_PATH",
+      "cliUrlEnvVar": "COPILOT_SDK_CLI_URL",
+      "clientExtraEnvVars": []
+    }
+  },
+  "pipeline": {
+    "stageOrder": [
+      "stage.orientation",
+      "stage.signal",
+      "stage.consolidation",
+      "stage.documentation",
+      "stage.skills",
+      "stage.governance",
+      "stage.observability"
+    ]
+  },
+  "docs": {
+    "outputRootPath": "docs/generated",
+    "fallbackOutputPath": "docs/generated/DREAM_OUTPUT.md",
+    "maxSignals": 25,
+    "maxMemories": 25,
+    "maxEvents": 25
+  },
+  "eval": {
+    "reportPath": "reports/evals/copilot-sdk-eval.json",
+    "requestTimeoutMs": 120000,
+    "maxAttempts": 3,
+    "quality": {
+      "reportPath": "reports/evals/dream-quality-eval.json",
+      "selfImproveReportPath": "reports/evals/dream-self-improve.json",
+      "minPassingScore": 0.8,
+      "maxHintsToPersist": 8
+    }
+  },
+  "discovery": {
+    "copilotDebug": {
+      "mode": "append",
+      "searchPaths": []
+    },
+    "claudeCode": {
+      "mode": "append",
+      "searchPaths": []
+    },
+    "codexTrace": {
+      "mode": "append",
+      "searchPaths": []
+    }
+  }
+}

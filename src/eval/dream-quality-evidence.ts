@@ -1,9 +1,11 @@
+import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { DreamConfig } from "../dream/config.js";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 export type JudgeEvidenceFile = {
   path: string;
-  kind: "transcript" | "event-log";
+  kind: "transcript" | "event-log" | "memory-output";
 };
 
 export function resolveJudgeEvidenceFiles(config: DreamConfig): JudgeEvidenceFile[] {
@@ -35,6 +37,14 @@ export function resolveJudgeEvidenceFiles(config: DreamConfig): JudgeEvidenceFil
   return [];
 }
 
+export function resolveMemoryOutputFiles(workspaceDir: string): JudgeEvidenceFile[] {
+  const storageDir = workspaceStorageDir(workspaceDir);
+  const candidates = ["memory.json", "copilot-memory.json"];
+  return candidates
+    .filter((p) => existsSync(join(storageDir, p)))
+    .map((p) => ({ kind: "memory-output" as const, path: join(storageDir, p) }));
+}
+
 export function buildEvidenceToolingSection(files: JudgeEvidenceFile[]): string {
   if (!files.length) {
     return [
@@ -46,12 +56,12 @@ export function buildEvidenceToolingSection(files: JudgeEvidenceFile[]): string 
   }
 
   return [
-    "Evidence Files (use native tools to inspect; do not assume):",
+    "Evidence Files (use the tools to read them — do NOT guess their contents):",
     ...files.map((file, index) => `- [${index + 1}] kind=${file.kind} path=${file.path}`),
     "",
-    "Required analysis focus while exploring evidence files:",
-    "- User reactions: confusion, acceptance, pushback, satisfaction, frustration, and requests for changes.",
-    "- Assistant behavior: tool usage quality, follow-through, error handling, iteration quality, and conclusion quality.",
-    "- Ground each score rationale in concrete observed patterns from the evidence files."
+    "Your task: compare input vs output.",
+    "- transcript / event-log = the input the dreamer processed",
+    "- memory-output = what the dreamer extracted and stored",
+    "Judge whether the extracted memories accurately reflect the important signals from the transcript."
   ].join("\n");
 }

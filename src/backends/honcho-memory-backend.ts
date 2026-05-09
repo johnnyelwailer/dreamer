@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Honcho, type HonchoConfig } from "@honcho-ai/sdk";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 import type { MemoryBackend } from "../core/contracts.js";
 import type { MemoryRecord } from "../core/types.js";
 import { buildSnapshot, defaultWorkspaceId, DREAMER_METADATA_KEY, DREAMER_PEER_ID, type HonchoClientLike, type HonchoExport, type HonchoMemoryBackendOptions, type HonchoPeerLike, type HonchoSnapshot, listAllConclusions, type MemoryScope, isMemoryScope, parseLegacyExport, parseSnapshot, SCOPE_PEERS, toConclusionContent } from "./honcho-memory-shared.js";
@@ -18,7 +19,7 @@ export class HonchoMemoryBackend implements MemoryBackend {
     const resolvedOptions = typeof options === "string" ? { exportPath: options } : options;
     this.workspaceDir = workspaceDir;
     this.workspaceId = resolvedOptions?.workspaceId ?? defaultWorkspaceId(workspaceDir);
-    this.exportPath = resolvedOptions?.exportPath ?? join(workspaceDir, ".dreamer", "honcho", "workspace.json");
+    this.exportPath = resolvedOptions?.exportPath ?? join(workspaceStorageDir(workspaceDir), "honcho", "workspace.json");
     this.clientConfig = {
       workspaceId: this.workspaceId,
       apiKey: resolvedOptions?.apiKey,

@@ -4,7 +4,7 @@ import { runDreamQualityEval, type DreamQualityReport } from "../src/eval/dream-
 
 // Auto-load .env.local
 try {
-  const envLocal = await readFile(join(process.cwd(), ".env.local"), "utf8");
+  const envLocal = await readFile(join(import.meta.dirname, "..", ".env.local"), "utf8");
   for (const line of envLocal.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
@@ -25,7 +25,7 @@ function printReport(report: DreamQualityReport): void {
   console.log(`═══════════════════════════════════════`);
   console.log(`  Score : ${(report.weightedScore * 100).toFixed(1)}%  [${bar(report.weightedScore)}]  (min ${(report.minPassingScore * 100).toFixed(0)}%)`);
   console.log(`  Model : ${report.model}`);
-  console.log(`  Docs  : ${report.docsEvaluated.join(", ") || "none"}`);
+  console.log(`  Transcripts : ${report.transcriptsEvaluated.join("\n              ") || "none"}`);
   if (report.judgeToolUsed !== undefined) {
     console.log(`  Judge : tool-contract  toolUsed=${report.judgeToolUsed}${report.judgeToolError ? `  error=${report.judgeToolError}` : ""}`);
   }
@@ -58,12 +58,9 @@ function printReport(report: DreamQualityReport): void {
 }
 
 async function main(): Promise<void> {
-  const workspaceDir = process.cwd();
+  const workspaceDir = process.env.DREAMER_WORKSPACE_DIR ?? process.cwd();
   const replayTranscripts = process.env.DREAM_EVAL_REPLAY_TRANSCRIPTS !== "0";
-  const report = await runDreamQualityEval(workspaceDir, {
-    runDreamCycle: true,
-    replayTranscripts
-  });
+  const report = await runDreamQualityEval(workspaceDir, { replayTranscripts });
   printReport(report);
   if (!report.passed) process.exitCode = 1;
 }

@@ -3,10 +3,11 @@ import { join } from "node:path";
 import type { PortableSchedule } from "./durable-schedule.js";
 import type { DailyTime, DurableScheduleStatus } from "./durable-schedule-shared.js";
 import { resolveSchedulePaths, runOrThrow, tryRun } from "./durable-schedule-shared.js";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 export async function installWindowsTask(workspaceDir: string, taskLabel: string, dailyTime: DailyTime): Promise<void> {
   const { nodePath, cliPath, logPath } = resolveSchedulePaths(workspaceDir);
-  await mkdir(join(workspaceDir, ".dreamer", "logs"), { recursive: true });
+  await mkdir(join(workspaceStorageDir(workspaceDir), "logs"), { recursive: true });
   const time = `${String(dailyTime.hour).padStart(2, "0")}:${String(dailyTime.minute).padStart(2, "0")}`;
   const taskCommand = `cmd /d /c "cd /d \"${workspaceDir}\" && \"${nodePath}\" --import tsx \"${cliPath}\" run >> \"${logPath}\" 2>&1"`;
   runOrThrow("schtasks", ["/Create", "/F", "/SC", "DAILY", "/ST", time, "/TN", taskLabel, "/TR", taskCommand]);
@@ -14,7 +15,7 @@ export async function installWindowsTask(workspaceDir: string, taskLabel: string
 
 export async function installWindowsPortableTask(workspaceDir: string, taskLabel: string, portable: PortableSchedule): Promise<void> {
   const { nodePath, cliPath, logPath } = resolveSchedulePaths(workspaceDir);
-  await mkdir(join(workspaceDir, ".dreamer", "logs"), { recursive: true });
+  await mkdir(join(workspaceStorageDir(workspaceDir), "logs"), { recursive: true });
   const [hh, mm] = portable.at.split(":");
   const time = `${hh}:${mm}`;
   const taskCommand = `cmd /d /c "cd /d \"${workspaceDir}\" && \"${nodePath}\" --import tsx \"${cliPath}\" run >> \"${logPath}\" 2>&1"`;

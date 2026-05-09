@@ -10,9 +10,9 @@
 ## Test Pyramid
 
 - Unit tests: contracts, transforms, merge policies, risk classifiers.
-- Integration tests: adapter to pipeline to backend/doc output.
-- Golden tests: deterministic outputs for events and generated docs.
-- Safety tests: prompt injection inert-data handling, write isolation.
+- Integration tests: adapter to pipeline to backend/skill output.
+- Golden tests: deterministic outputs for events and generated skill patches.
+- Safety tests: prompt injection inert-data handling, workspace read-only enforcement, write isolation.
 
 ## TDD Workflow
 
@@ -51,28 +51,33 @@
 - Contradictions are flagged and preserved.
 - Provenance fields are populated on all writes.
 
+---
+
+> **DEFERRED — Slice: Documentation Reconstruction**
+>
+> Tests for documentation generation are not part of the active test matrix. See the [Deferred Use Case: Documentation Generation](prd.md#deferred-use-case-documentation-generation) section in the PRD.
+
+---
+
 ## Slice 3
-
-- Generated docs contain required sections.
-- Re-run with unchanged input yields minimal/no diff.
-- AGENTS concision guard blocks oversized output.
-
-## Slice 4
 
 - Detection rules trigger on repeated retries.
 - Proposal artifacts validate against schema.
 - High-risk proposals require explicit approval path.
 
-## Slice 5
+## Slice 4
 
 - Contract suite runs unchanged for each plugin implementation.
 - Plugin switching works through config only.
 
-## Slice 6
+## Slice 5
 
 - Scheduler triggers runs by configured interval.
 - Diary includes required run metadata.
 - Transcript instructions are treated as inert text.
+- Direct workspace filesystem writes are blocked and produce auditable errors.
+- Repo-scoped outputs are staged on a separate branch, not the working branch.
+- Approval gate cannot be bypassed by the dream run itself.
 - Isolation checks block unsafe write paths.
 
 ## Quality Gates
@@ -101,5 +106,7 @@
 
 - 1 end-to-end test per slice.
 - 3 to 5 unit tests per new module.
-- 1 golden test for each generated document type.
+- 1 golden test for each generated skill patch type.
 - 1 negative safety test for each governance rule.
+
+> **Note:** The 1 golden test for each generated document type belongs to the deferred documentation use case and is not part of the active test matrix.

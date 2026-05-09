@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -21,6 +22,6 @@ export class JsonStateStore {
   }
 
   static runStatePath(workspaceDir: string): string {
-    return join(workspaceDir, ".dreamer", "state.json");
+    return join(workspaceStorageDir(workspaceDir), "state.json");
   }
 }

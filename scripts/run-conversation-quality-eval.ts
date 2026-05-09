@@ -4,7 +4,7 @@ import { runConversationQualityEval } from "../src/eval/conversation-quality.js"
 
 // Auto-load .env.local
 try {
-  const envLocal = await readFile(join(process.cwd(), ".env.local"), "utf8");
+  const envLocal = await readFile(join(import.meta.dirname, "..", ".env.local"), "utf8");
   for (const line of envLocal.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
@@ -16,6 +16,6 @@ try {
   }
 } catch { /* no .env.local */ }
 
-const workspaceDir = process.cwd();
+const workspaceDir = process.env.DREAMER_WORKSPACE_DIR ?? process.cwd();
 const report = await runConversationQualityEval(workspaceDir);
 console.log(JSON.stringify(report, null, 2));

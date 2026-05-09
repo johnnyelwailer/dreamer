@@ -5,13 +5,14 @@ import { spawnSync } from "node:child_process";
 import type { PortableSchedule } from "./durable-schedule.js";
 import type { DailyTime, DurableScheduleStatus } from "./durable-schedule-shared.js";
 import { resolveSchedulePaths, runOrThrow, shQuote, tryRun, xmlEscape } from "./durable-schedule-shared.js";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 export async function installLaunchd(workspaceDir: string, taskLabel: string, dailyTime: DailyTime, runAtLoad: boolean): Promise<void> {
   const launchAgentsDir = join(homedir(), "Library", "LaunchAgents");
   const plistPath = join(launchAgentsDir, `${taskLabel}.plist`);
   const { nodePath, cliPath, logPath } = resolveSchedulePaths(workspaceDir);
   await mkdir(launchAgentsDir, { recursive: true });
-  await mkdir(join(workspaceDir, ".dreamer", "logs"), { recursive: true });
+  await mkdir(join(workspaceStorageDir(workspaceDir), "logs"), { recursive: true });
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -36,7 +37,7 @@ export async function installLaunchdPortable(workspaceDir: string, taskLabel: st
   const plistPath = join(launchAgentsDir, `${taskLabel}.plist`);
   const { nodePath, cliPath, logPath } = resolveSchedulePaths(workspaceDir);
   await mkdir(launchAgentsDir, { recursive: true });
-  await mkdir(join(workspaceDir, ".dreamer", "logs"), { recursive: true });
+  await mkdir(join(workspaceStorageDir(workspaceDir), "logs"), { recursive: true });
 
   const interval =
     portable.kind === "hourly"
@@ -91,7 +92,7 @@ export async function installCron(workspaceDir: string, taskLabel: string, daily
 
 export async function installCronExpression(workspaceDir: string, taskLabel: string, cronExpression: string): Promise<void> {
   const { nodePath, cliPath, logPath } = resolveSchedulePaths(workspaceDir);
-  await mkdir(join(workspaceDir, ".dreamer", "logs"), { recursive: true });
+  await mkdir(join(workspaceStorageDir(workspaceDir), "logs"), { recursive: true });
   const marker = `# ${taskLabel}`;
   const command = `${cronExpression} cd ${shQuote(workspaceDir)} && ${shQuote(nodePath)} --import tsx ${shQuote(cliPath)} run >> ${shQuote(logPath)} 2>&1 ${marker}`;
   const current = tryRun("crontab", ["-l"]);

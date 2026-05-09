@@ -1,4 +1,5 @@
 import type { DreamQualityRubricConfig, EvalCaseConfig } from "./runtime-manifest-types.js";
+import { resolveAssetPath } from "./dreamer-home.js";
 
 function asString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim().length === 0) throw new Error(`Invalid runtime manifest field: ${field}`);
@@ -36,7 +37,9 @@ export function parseDreamQualityRubricObject(parsed: unknown, fieldPrefix: stri
     throw new Error(`Invalid dream quality rubric dimensions: ${fieldPrefix}`);
   }
   return {
-    judgePromptTemplatePath: asString(record.judgePromptTemplatePath, `${fieldPrefix}.judgePromptTemplatePath`),
+    judgePromptTemplatePath: record.judgePromptTemplatePath
+      ? asString(record.judgePromptTemplatePath, `${fieldPrefix}.judgePromptTemplatePath`)
+      : resolveAssetPath("prompts/dream-quality-judge.md"),
     dimensions: dimensions.map((dimension, index) => ({
       id: asString(dimension.id, `${fieldPrefix}.dimensions[${index}].id`),
       description: asString(dimension.description, `${fieldPrefix}.dimensions[${index}].description`),

@@ -35,7 +35,7 @@ async function applyImprovements(workspaceDir: string, improvements: string[]): 
 }
 
 async function main(): Promise<void> {
-  const workspaceDir = process.cwd();
+  const workspaceDir = process.env.DREAMER_WORKSPACE_DIR ?? process.cwd();
   const runtime = readRuntimeManifest(workspaceDir);
 
   const before = await runDreamQualityEval(workspaceDir, { runDreamCycle: true });

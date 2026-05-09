@@ -4,6 +4,7 @@ import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provide
 import { buildCopilotSdkProviderOptions } from "./copilot-sdk-options.js";
 import { discoverCopilotDebugSessionDir } from "./copilot-debug-session-discovery.js";
 import { discoverClaudeCodeLogPath, discoverCodexTraceLogPath } from "./adapter-log-discovery.js";
+import { workspaceStorageDir } from "./dreamer-home.js";
 
 type HonchoEnvironment = "local" | "production";
 
@@ -58,7 +59,8 @@ function readPositiveInteger(value: string | undefined): number | undefined {
 }
 
 export function readDreamConfig(workspaceDir: string): DreamConfig {
-  const fixturesDir = join(workspaceDir, ".dreamer", "fixtures");
+  const storageDir = workspaceStorageDir(workspaceDir);
+  const fixturesDir = join(storageDir, "fixtures");
   const runtime = readRuntimeManifest(workspaceDir);
   const copilotSdkModel = process.env.COPILOT_SDK_MODEL ?? runtime.provider.defaultModel;
   const discoveredCopilotDebugSessionDir = discoverCopilotDebugSessionDir({
@@ -99,9 +101,9 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
     terminalCastPath: process.env.DREAM_TERMINAL_CAST_FILE ?? join(fixturesDir, "terminal.cast"),
     browserHarPath: process.env.DREAM_BROWSER_TRACE_FILE ?? join(fixturesDir, "browser.har"),
     copilotMemoryPath:
-      process.env.DREAM_COPILOT_MEMORY_FILE ?? join(workspaceDir, ".dreamer", "copilot-memory.json"),
+      process.env.DREAM_COPILOT_MEMORY_FILE ?? join(storageDir, "copilot-memory.json"),
     honchoExportPath:
-      process.env.DREAM_HONCHO_WORKSPACE_FILE ?? join(workspaceDir, ".dreamer", "honcho", "workspace.json"),
+      process.env.DREAM_HONCHO_WORKSPACE_FILE ?? join(storageDir, "honcho", "workspace.json"),
     honchoWorkspaceId: process.env.DREAM_HONCHO_WORKSPACE_ID ?? process.env.HONCHO_WORKSPACE_ID ?? "dreamer",
     honchoApiKey: process.env.DREAM_HONCHO_API_KEY ?? process.env.HONCHO_API_KEY,
     honchoBaseUrl: process.env.DREAM_HONCHO_BASE_URL ?? process.env.HONCHO_URL,

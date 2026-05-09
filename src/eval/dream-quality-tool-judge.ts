@@ -45,9 +45,9 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
     })) as CopilotSession;
 
     const prompts = [
-      `${input.prompt}\n\nMANDATORY:\n1) inspect available evidence files via list_quality_evidence_files, read_quality_evidence_chunk, and search_quality_evidence\n2) focus on user reactions and assistant behavior patterns\n3) call submit_quality_scores exactly once with complete final results`,
-      "Your previous response did not call the required tool. Call submit_quality_scores now with complete results and no additional prose.",
-      "Final attempt: call submit_quality_scores immediately with all rubric scores, strengths, weaknesses, and improvements."
+      `${input.prompt}\n\nCall submit_quality_scores now with your complete evaluation results.`,
+      "You must call submit_quality_scores. Call it now with all rubric scores, strengths, weaknesses, and improvements.",
+      "Final attempt: call submit_quality_scores immediately with complete results."
     ];
 
     for (const prompt of prompts) {
