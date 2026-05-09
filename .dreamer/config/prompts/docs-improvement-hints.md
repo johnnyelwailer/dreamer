@@ -1,0 +1,3 @@
+- Keep sections concrete, evidence-backed, and tied to observed signals/memories.
+- Include explicit risks, assumptions, and actionable next steps.
+- Prefer concise structure over verbosity; avoid generic filler language.

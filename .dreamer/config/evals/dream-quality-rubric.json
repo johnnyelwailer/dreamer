@@ -1,0 +1,25 @@
+{
+  "judgePromptTemplatePath": ".dreamer/config/prompts/dream-quality-judge.md",
+  "dimensions": [
+    {
+      "id": "grounding",
+      "description": "Content is grounded in actual events, signals, and memories from this run.",
+      "weight": 0.3
+    },
+    {
+      "id": "actionability",
+      "description": "Docs provide concrete, prioritized, and testable next actions.",
+      "weight": 0.3
+    },
+    {
+      "id": "coherence",
+      "description": "Narrative is internally consistent, non-contradictory, and easy to follow.",
+      "weight": 0.2
+    },
+    {
+      "id": "coverage",
+      "description": "Important themes from artifacts are covered without major omissions.",
+      "weight": 0.2
+    }
+  ]
+}

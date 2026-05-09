@@ -1,0 +1,71 @@
+{
+  "provider": {
+    "id": "provider.copilot.sdk",
+    "defaultModel": "qwen3.6-35b-a3b-q3",
+    "sdk": {
+      "authMode": "none",
+      "providerMode": "byok",
+      "requestTimeoutMs": 120000,
+      "gitHubTokenEnvVar": "GITHUB_TOKEN",
+      "sessionGitHubTokenEnvVar": "COPILOT_SDK_SESSION_GITHUB_TOKEN",
+      "cliPathEnvVar": "COPILOT_SDK_CLI_PATH",
+      "cliUrlEnvVar": "COPILOT_SDK_CLI_URL",
+      "clientExtraEnvVars": ["GITHUB_HOST"],
+      "byok": {
+        "type": "openai",
+        "wireApi": "completions",
+        "baseUrlEnvVar": "COPILOT_SDK_BASE_URL",
+        "fallbackBaseUrlEnvVar": "HOSTED_LLM_BASE_URL",
+        "apiKeyEnvVar": "COPILOT_SDK_API_KEY",
+        "fallbackApiKeyEnvVar": "HOSTED_LLM_API_KEY"
+      }
+    }
+  },
+  "pipeline": {
+    "stageOrder": [
+      "stage.orientation",
+      "stage.signal",
+      "stage.consolidation",
+      "stage.documentation",
+      "stage.skills",
+      "stage.governance",
+      "stage.observability"
+    ]
+  },
+  "docs": {
+    "outputRootPath": "docs/generated",
+    "fallbackOutputPath": "docs/generated/DREAM_OUTPUT.md",
+    "promptTemplatePath": ".dreamer/config/prompts/docs-generation.md",
+    "improvementHintsPath": ".dreamer/config/prompts/docs-improvement-hints.md",
+    "maxSignals": 25,
+    "maxMemories": 25,
+    "maxEvents": 25
+  },
+  "eval": {
+    "casesPath": ".dreamer/config/evals/copilot-sdk-cases.json",
+    "reportPath": "reports/evals/copilot-sdk-eval.json",
+    "requestTimeoutMs": 120000,
+    "maxAttempts": 3,
+    "quality": {
+      "rubricPath": ".dreamer/config/evals/dream-quality-rubric.json",
+      "reportPath": "reports/evals/dream-quality-eval.json",
+      "selfImproveReportPath": "reports/evals/dream-self-improve.json",
+      "minPassingScore": 0.8,
+      "maxHintsToPersist": 8
+    }
+  },
+  "discovery": {
+    "copilotDebug": {
+      "mode": "append",
+      "searchPaths": []
+    },
+    "claudeCode": {
+      "mode": "append",
+      "searchPaths": []
+    },
+    "codexTrace": {
+      "mode": "append",
+      "searchPaths": []
+    }
+  }
+}

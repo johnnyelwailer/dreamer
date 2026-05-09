@@ -1,0 +1,12 @@
+[
+  {
+    "id": "constraints",
+    "prompt": "User asked to keep files under 150 LOC and enforce TDD. Agent repeatedly exceeded file length and added no tests. Current memory says: 'Use TDD.' Return a corrected memory note that preserves both constraints and concrete enforcement.",
+    "mustContain": ["150 LOC", "TDD"]
+  },
+  {
+    "id": "contradiction",
+    "prompt": "Earlier session says provider A only. Latest user says provider B and keep provider-agnostic design. Current memory says: 'Provider A is mandatory.' Return updated memory that explicitly flags contradiction and avoids silent overwrite.",
+    "mustContain": ["contradiction", "provider-agnostic"]
+  }
+]
