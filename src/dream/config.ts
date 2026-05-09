@@ -1,78 +1,95 @@
 import { join } from "node:path";
+import { readRuntimeManifest } from "./runtime-manifest.js";
+import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provider.js";
+import { buildCopilotSdkProviderOptions } from "./copilot-sdk-options.js";
+import { discoverCopilotDebugSessionDir } from "./copilot-debug-session-discovery.js";
+import { discoverClaudeCodeLogPath, discoverCodexTraceLogPath } from "./adapter-log-discovery.js";
+
+type HonchoEnvironment = "local" | "production";
+
+function readHonchoEnvironment(value: string | undefined): HonchoEnvironment | undefined {
+  if (value === "local" || value === "production") return value;
+  return undefined;
+}
 
 export type DreamConfig = {
   adapterId: string;
   backendId: string;
   providerId: string;
+  stageOrder: string[];
   minSessions: number;
   copilotDebugSessionDir: string;
   jsonlEventsPath: string;
-  vscodeChatExportPath: string;
-  copilotCliPath: string;
   claudeCodePath: string;
-  cursorChatPath: string;
-  windsurfTracePath: string;
   codexTracePath: string;
   terminalCastPath: string;
   browserHarPath: string;
   copilotMemoryPath: string;
-  honchoWorkspacePath: string;
-  hostedProviderBaseUrl: string;
-  hostedProviderApiKey: string;
-  hostedProviderModel: string;
-  copilotSdkBaseUrl: string;
-  copilotSdkApiKey: string;
+  honchoExportPath: string;
+  honchoWorkspaceId: string;
+  honchoApiKey?: string;
+  honchoBaseUrl?: string;
+  honchoEnvironment?: HonchoEnvironment;
   copilotSdkModel: string;
-  anthropicBaseUrl: string;
-  anthropicApiKey: string;
-  anthropicModel: string;
-  ollamaBaseUrl: string;
-  ollamaModel: string;
-  lmStudioBaseUrl: string;
-  lmStudioModel: string;
-  localOpenAiBaseUrl: string;
-  localOpenAiApiKey: string;
-  localOpenAiModel: string;
+  copilotSdkProviderOptions: CopilotSdkProviderOptions;
+  docsOutputRootPath: string;
+  docsFallbackOutputPath: string;
+  docsPromptTemplatePath: string;
+  docsImprovementHintsPath: string;
+  docsMaxSignals: number;
+  docsMaxMemories: number;
+  docsMaxEvents: number;
 };
 
 export function readDreamConfig(workspaceDir: string): DreamConfig {
   const fixturesDir = join(workspaceDir, ".dreamer", "fixtures");
+  const runtime = readRuntimeManifest(workspaceDir);
+  const copilotSdkModel = process.env.COPILOT_SDK_MODEL ?? runtime.provider.defaultModel;
+  const discoveredCopilotDebugSessionDir = discoverCopilotDebugSessionDir({
+    searchPaths: runtime.discovery?.copilotDebug?.searchPaths,
+    mode: runtime.discovery?.copilotDebug?.mode
+  });
+  const discoveredClaudeCodePath = discoverClaudeCodeLogPath({
+    searchPaths: runtime.discovery?.claudeCode?.searchPaths,
+    mode: runtime.discovery?.claudeCode?.mode
+  });
+  const discoveredCodexTracePath = discoverCodexTraceLogPath({
+    searchPaths: runtime.discovery?.codexTrace?.searchPaths,
+    mode: runtime.discovery?.codexTrace?.mode
+  });
   return {
     adapterId: process.env.DREAM_ADAPTER_ID ?? "adapter.copilot.debug",
     backendId: process.env.DREAM_BACKEND_ID ?? "backend.file.memory",
-    providerId: process.env.DREAM_PROVIDER_ID ?? "provider.echo",
+    providerId: process.env.DREAM_PROVIDER_ID ?? runtime.provider.id,
+    stageOrder: runtime.pipeline.stageOrder,
     minSessions: Number(process.env.DREAM_MIN_SESSIONS ?? "1"),
     copilotDebugSessionDir:
-      process.env.COPILOT_DEBUG_SESSION_DIR ?? join(fixturesDir, "copilot-session"),
+      process.env.COPILOT_DEBUG_SESSION_DIR ??
+      discoveredCopilotDebugSessionDir ??
+      join(fixturesDir, "copilot-session"),
     jsonlEventsPath: process.env.DREAM_JSONL_EVENTS_FILE ?? join(fixturesDir, "events.jsonl"),
-    vscodeChatExportPath:
-      process.env.DREAM_VSCODE_CHAT_EXPORT_FILE ?? join(fixturesDir, "vscode-chat-export.json"),
-    copilotCliPath: process.env.DREAM_COPILOT_CLI_FILE ?? join(fixturesDir, "copilot-cli.jsonl"),
-    claudeCodePath: process.env.DREAM_CLAUDE_CODE_FILE ?? join(fixturesDir, "claude-code.jsonl"),
-    cursorChatPath: process.env.DREAM_CURSOR_CHAT_FILE ?? join(fixturesDir, "cursor-chat.json"),
-    windsurfTracePath: process.env.DREAM_WINDSURF_TRACE_FILE ?? join(fixturesDir, "windsurf.jsonl"),
-    codexTracePath: process.env.DREAM_CODEX_TRACE_FILE ?? join(fixturesDir, "codex.jsonl"),
+    claudeCodePath:
+      process.env.DREAM_CLAUDE_CODE_FILE ?? discoveredClaudeCodePath ?? join(fixturesDir, "claude-code.jsonl"),
+    codexTracePath:
+      process.env.DREAM_CODEX_TRACE_FILE ?? discoveredCodexTracePath ?? join(fixturesDir, "codex.jsonl"),
     terminalCastPath: process.env.DREAM_TERMINAL_CAST_FILE ?? join(fixturesDir, "terminal.cast"),
     browserHarPath: process.env.DREAM_BROWSER_TRACE_FILE ?? join(fixturesDir, "browser.har"),
     copilotMemoryPath:
       process.env.DREAM_COPILOT_MEMORY_FILE ?? join(workspaceDir, ".dreamer", "copilot-memory.json"),
-    honchoWorkspacePath:
+    honchoExportPath:
       process.env.DREAM_HONCHO_WORKSPACE_FILE ?? join(workspaceDir, ".dreamer", "honcho", "workspace.json"),
-    hostedProviderBaseUrl: process.env.HOSTED_LLM_BASE_URL ?? "",
-    hostedProviderApiKey: process.env.HOSTED_LLM_API_KEY ?? "",
-    hostedProviderModel: process.env.HOSTED_LLM_MODEL ?? "qwen3.6-35b-a3b-q3",
-    copilotSdkBaseUrl: process.env.COPILOT_SDK_BASE_URL ?? "",
-    copilotSdkApiKey: process.env.COPILOT_SDK_API_KEY ?? "",
-    copilotSdkModel: process.env.COPILOT_SDK_MODEL ?? "gpt-4o-mini",
-    anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com/v1",
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-    anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-3-5-sonnet-latest",
-    ollamaBaseUrl: process.env.OLLAMA_BASE_URL ?? "",
-    ollamaModel: process.env.OLLAMA_MODEL ?? "llama3.2",
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL ?? "",
-    lmStudioModel: process.env.LM_STUDIO_MODEL ?? "local-model",
-    localOpenAiBaseUrl: process.env.LOCAL_OPENAI_BASE_URL ?? "",
-    localOpenAiApiKey: process.env.LOCAL_OPENAI_API_KEY ?? "",
-    localOpenAiModel: process.env.LOCAL_OPENAI_MODEL ?? "local-model"
+    honchoWorkspaceId: process.env.DREAM_HONCHO_WORKSPACE_ID ?? process.env.HONCHO_WORKSPACE_ID ?? "dreamer",
+    honchoApiKey: process.env.DREAM_HONCHO_API_KEY ?? process.env.HONCHO_API_KEY,
+    honchoBaseUrl: process.env.DREAM_HONCHO_BASE_URL ?? process.env.HONCHO_URL,
+    honchoEnvironment: readHonchoEnvironment(process.env.DREAM_HONCHO_ENVIRONMENT),
+    copilotSdkModel,
+    copilotSdkProviderOptions: buildCopilotSdkProviderOptions(runtime, copilotSdkModel),
+    docsOutputRootPath: runtime.docs.outputRootPath,
+    docsFallbackOutputPath: runtime.docs.fallbackOutputPath,
+    docsPromptTemplatePath: runtime.docs.promptTemplatePath,
+    docsImprovementHintsPath: runtime.docs.improvementHintsPath,
+    docsMaxSignals: runtime.docs.maxSignals,
+    docsMaxMemories: runtime.docs.maxMemories,
+    docsMaxEvents: runtime.docs.maxEvents
   };
 }

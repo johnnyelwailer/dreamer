@@ -8,6 +8,7 @@ export function buildContext(workspaceDir: string, runId: string): DreamContext 
     events: [],
     memories: [],
     signals: [],
+    providerOutputs: {},
     diary: [],
     metrics: {
       sessionsProcessed: 0,

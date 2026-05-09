@@ -4,24 +4,16 @@ import { FileMemoryBackend } from "../backends/file-memory-backend.js";
 import { runPipeline } from "../core/pipeline.js";
 import { PluginRegistry } from "../core/registry.js";
 import { JsonStateStore } from "../core/state-store.js";
+import type { IntelligenceProvider } from "../core/contracts.js";
 import { CopilotDebugAdapter } from "../adapters/copilot-debug-adapter.js";
-import { VsCodeChatExportAdapter } from "../adapters/vscode-chat-export-adapter.js";
-import { CopilotCliAdapter } from "../adapters/copilot-cli-adapter.js";
 import { ClaudeCodeAdapter } from "../adapters/claude-code-adapter.js";
-import { CursorChatAdapter } from "../adapters/cursor-chat-adapter.js";
-import { WindsurfTraceAdapter } from "../adapters/windsurf-trace-adapter.js";
 import { CodexTraceAdapter } from "../adapters/codex-trace-adapter.js";
 import { TerminalRecordingAdapter } from "../adapters/terminal-recording-adapter.js";
 import { BrowserTraceAdapter } from "../adapters/browser-trace-adapter.js";
-import { EchoProvider } from "../providers/echo-provider.js";
-import { OpenAiCompatibleProvider } from "../providers/openai-compatible-provider.js";
 import { CopilotSdkProvider } from "../providers/copilot-sdk-provider.js";
-import { AnthropicProvider } from "../providers/anthropic-provider.js";
-import { OllamaProvider } from "../providers/ollama-provider.js";
-import { LmStudioProvider } from "../providers/lm-studio-provider.js";
-import { LocalOpenAiProvider } from "../providers/local-openai-provider.js";
 import { buildContext } from "./build-context.js";
 import { readDreamConfig } from "./config.js";
+import { writeProviderDocs } from "./generate-provider-docs.js";
 import { ConsolidationStage } from "../stages/consolidation-stage.js";
 import { DocumentationStage } from "../stages/documentation-stage.js";
 import { GovernanceStage } from "../stages/governance-stage.js";
@@ -38,27 +30,23 @@ export async function runDream(workspaceDir: string): Promise<void> {
   const registry = new PluginRegistry();
   registry.registerAdapter(new CopilotDebugAdapter(config.copilotDebugSessionDir));
   registry.registerAdapter(new JsonlEventAdapter(config.jsonlEventsPath));
-  registry.registerAdapter(new VsCodeChatExportAdapter(config.vscodeChatExportPath));
-  registry.registerAdapter(new CopilotCliAdapter(config.copilotCliPath));
   registry.registerAdapter(new ClaudeCodeAdapter(config.claudeCodePath));
-  registry.registerAdapter(new CursorChatAdapter(config.cursorChatPath));
-  registry.registerAdapter(new WindsurfTraceAdapter(config.windsurfTracePath));
   registry.registerAdapter(new CodexTraceAdapter(config.codexTracePath));
   registry.registerAdapter(new TerminalRecordingAdapter(config.terminalCastPath));
   registry.registerAdapter(new BrowserTraceAdapter(config.browserHarPath));
   registry.registerBackend(new FileMemoryBackend(workspaceDir));
   registry.registerBackend(new InMemoryBackend());
   registry.registerBackend(new CopilotMemoryBackend(workspaceDir, config.copilotMemoryPath));
-  registry.registerBackend(new HonchoMemoryBackend(workspaceDir, config.honchoWorkspacePath));
-  registry.registerProvider(new EchoProvider());
-  registry.registerProvider(
-    new OpenAiCompatibleProvider(config.hostedProviderBaseUrl, config.hostedProviderApiKey, config.hostedProviderModel)
+  registry.registerBackend(
+    new HonchoMemoryBackend(workspaceDir, {
+      exportPath: config.honchoExportPath,
+      workspaceId: config.honchoWorkspaceId,
+      apiKey: config.honchoApiKey,
+      baseURL: config.honchoBaseUrl,
+      environment: config.honchoEnvironment
+    })
   );
-  registry.registerProvider(new CopilotSdkProvider(config.copilotSdkBaseUrl, config.copilotSdkApiKey, config.copilotSdkModel));
-  registry.registerProvider(new AnthropicProvider(config.anthropicBaseUrl, config.anthropicApiKey, config.anthropicModel));
-  registry.registerProvider(new OllamaProvider(config.ollamaBaseUrl, config.ollamaModel));
-  registry.registerProvider(new LmStudioProvider(config.lmStudioBaseUrl, config.lmStudioModel));
-  registry.registerProvider(new LocalOpenAiProvider(config.localOpenAiBaseUrl, config.localOpenAiApiKey, config.localOpenAiModel));
+  registry.registerProvider(new CopilotSdkProvider(config.copilotSdkProviderOptions));
 
   const adapter = registry.requireAdapter(config.adapterId);
   const backend = registry.requireBackend(config.backendId);
@@ -72,33 +60,43 @@ export async function runDream(workspaceDir: string): Promise<void> {
   registry.registerStage(new GovernanceStage());
   registry.registerStage(new ObservabilityStage());
 
-  const context = buildContext(workspaceDir, runId);
-  const loaded = await backend.load();
-  context.memories = loaded;
-  const previousState = await state.read<{ cursor?: string }>({});
-  const ingest = await adapter.ingest(previousState.cursor);
-  context.events = ingest.events;
-  if (context.events.length) {
-    const summary = await provider.summarize(context.events.map((e) => e.text).join("\n"));
-    context.signals.push(`provider_summary=${summary.slice(0, 120)}`);
-  }
-  const sessions = context.events.filter((event) => event.kind === "session_start").length;
-  if (sessions < config.minSessions) {
-    await state.write({ cursor: ingest.cursor ?? previousState.cursor ?? null, lastRunAt: context.nowIso });
-    return;
-  }
+  try {
+    const context = buildContext(workspaceDir, runId);
+    context.diary.push(`config:adapter=${config.adapterId}`);
+    context.diary.push(`config:backend=${config.backendId}`);
+    context.diary.push(`config:provider=${config.providerId}`);
+    context.diary.push(`config:model=${config.copilotSdkModel}`);
+    context.diary.push(`source:copilotDebugSessionDir=${config.copilotDebugSessionDir}`);
+    const loaded = await backend.load();
+    context.memories = loaded;
+    const previousState = await state.read<{ cursor?: string }>({});
+    const ingest = await adapter.ingest(previousState.cursor);
+    context.events = ingest.events;
+    context.metrics.sessionsProcessed = context.events.filter((event) => event.kind === "session_start").length;
+    context.diary.push(`ingest:events=${context.events.length}`);
+    context.diary.push(`ingest:sessions=${context.metrics.sessionsProcessed}`);
+    context.diary.push(`ingest:cursor=${String(ingest.cursor ?? "none")}`);
+    if (context.events.length) {
+      const summary = await provider.summarize(context.events.map((e) => e.text).join("\n"));
+      context.signals.push(`provider_summary=${summary.slice(0, 120)}`);
+      context.providerOutputs.summary = summary;
+    }
+    const sessions = context.events.filter((event) => event.kind === "session_start").length;
+    if (sessions < config.minSessions) {
+      await state.write({ cursor: ingest.cursor ?? previousState.cursor ?? null, lastRunAt: context.nowIso });
+      return;
+    }
 
-  const orderedStages = [
-    "stage.orientation",
-    "stage.signal",
-    "stage.consolidation",
-    "stage.documentation",
-    "stage.skills",
-    "stage.governance",
-    "stage.observability"
-  ].map((id) => registry.requireStage(id));
+    const orderedStages = config.stageOrder.map((id) => registry.requireStage(id));
 
-  const finalContext = await runPipeline(context, orderedStages);
-  await backend.save(finalContext.memories);
-  await state.write({ cursor: ingest.cursor ?? null, lastRunAt: finalContext.nowIso });
+    const finalContext = await runPipeline(context, orderedStages);
+    await writeProviderDocs(finalContext, provider, config);
+    await backend.save(finalContext.memories);
+    await state.write({ cursor: ingest.cursor ?? null, lastRunAt: finalContext.nowIso });
+  } finally {
+    const maybeDisposable = provider as IntelligenceProvider & { dispose?: () => Promise<void> };
+    if (typeof maybeDisposable.dispose === "function") {
+      await maybeDisposable.dispose();
+    }
+  }
 }

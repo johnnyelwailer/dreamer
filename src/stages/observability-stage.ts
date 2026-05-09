@@ -20,6 +20,16 @@ export class ObservabilityStage implements PipelineStage {
     ].join("\n");
     await writeFile(join(outDir, "dream-diary.md"), `${summary}\n`, "utf8");
     await writeFile(join(outDir, "metrics.json"), JSON.stringify(context.metrics, null, 2), "utf8");
+    const pipelineLog = {
+      runId: context.runId,
+      generatedAt: context.nowIso,
+      diary: context.diary,
+      metrics: context.metrics,
+      providerOutputs: context.providerOutputs,
+      eventsSample: context.events.slice(0, 10),
+      memoriesSample: context.memories.slice(0, 10)
+    };
+    await writeFile(join(outDir, "pipeline-log.json"), JSON.stringify(pipelineLog, null, 2), "utf8");
     return context;
   }
 }

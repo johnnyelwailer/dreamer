@@ -34,6 +34,10 @@ export type DreamContext = {
   events: NormalizedEvent[];
   memories: MemoryRecord[];
   signals: string[];
+  providerOutputs: {
+    summary?: string;
+    documentationPlan?: string;
+  };
   metrics: DreamRunMetrics;
   diary: string[];
 };
