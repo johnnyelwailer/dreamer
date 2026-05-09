@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+.tmp/
+.env
+.env.local
+.env.*.local
+!.env.example
+.dreamer/memory.json
+.dreamer/state.json
+docs/generated/
+reports/
+.pnpm-store/
+pnpm-workspace.yaml

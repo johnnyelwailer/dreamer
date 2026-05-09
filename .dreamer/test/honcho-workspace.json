@@ -1,0 +1,33 @@
+{
+  "workspaceId": "dreamer-local",
+  "peers": [
+    {
+      "id": "dreamer",
+      "role": "planner"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "session-1778345299112",
+      "memoryIds": [
+        "m-1"
+      ],
+      "startedAt": "2026-05-09T16:48:19.112Z"
+    }
+  ],
+  "memory": [
+    {
+      "id": "m-1",
+      "scope": "workspace",
+      "statement": "Use unit tests before refactors",
+      "confidence": 0.9,
+      "provenance": {
+        "source": "test",
+        "eventIds": [
+          "e-1"
+        ],
+        "capturedAt": "2026-01-01T00:00:00.000Z"
+      }
+    }
+  ]
+}

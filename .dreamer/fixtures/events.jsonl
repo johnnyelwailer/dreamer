@@ -1,0 +1,2 @@
+{"id":"e1","timestamp":"2026-05-09T10:00:00.000Z","source":"fixture","type":"session_start","text":"Session started"}
+{"id":"e2","timestamp":"2026-05-09T10:01:00.000Z","source":"fixture","type":"message","text":"Keep files under 150 LOC"}

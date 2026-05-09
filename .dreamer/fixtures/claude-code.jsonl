@@ -1,0 +1,2 @@
+{"session_id":"claude-1","id":"claude-start","timestamp":"2026-01-01T00:00:00.000Z","event":"session_start","content":"session begin"}
+{"session_id":"claude-1","id":"claude-msg","timestamp":"2026-01-01T00:00:01.000Z","event":"message","role":"user","content":"optimize this function"}

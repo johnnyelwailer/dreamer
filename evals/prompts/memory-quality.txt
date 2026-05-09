@@ -1,0 +1,20 @@
+You are evaluating memory extraction quality for an agentic dreaming system.
+
+Transcript excerpt:
+{{transcript_excerpt}}
+
+Current memory:
+{{current_memory}}
+
+Expected rule:
+{{expected_rule}}
+
+Task:
+1. Return a short assessment of whether memory is correct.
+2. List missing or incorrect constraints.
+3. Provide a corrected memory entry with provenance-focused language.
+
+Constraints:
+- Be concise.
+- Preserve explicit user intent over stale assumptions.
+- Never drop safety or governance constraints.

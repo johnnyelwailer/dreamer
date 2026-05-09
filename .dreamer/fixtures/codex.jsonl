@@ -1,0 +1,2 @@
+{"run_id":"codex-1","id":"codex-start","ts":"2026-01-01T00:00:00.000Z","kind":"session_start","content":"codex run"}
+{"run_id":"codex-1","id":"codex-msg","ts":"2026-01-01T00:00:01.000Z","kind":"message","content":"write tests"}

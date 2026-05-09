@@ -1,0 +1,64 @@
+{
+  "workspaceId": "dreamer-local",
+  "peers": [
+    {
+      "id": "dreamer",
+      "role": "planner"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "session-1778344644730",
+      "memoryIds": [
+        "mem:T2JzZXJ2ZWQgcHJvdmlk",
+        "mem:T2JzZXJ2ZWQgZG9jc19j",
+        "mem:T2JzZXJ2ZWQgc2Vzc2lv"
+      ],
+      "startedAt": "2026-05-09T16:37:24.730Z"
+    }
+  ],
+  "memory": [
+    {
+      "id": "mem:T2JzZXJ2ZWQgcHJvdmlk",
+      "scope": "workspace",
+      "statement": "Observed provider_summary=- 🔖 **Log session anchor**: Record ID `9c9d090f-85f9-4ced-851b-01fcb5fd4e0d` as the active tracking key for debugging, ",
+      "confidence": 0.7,
+      "provenance": {
+        "source": "dream-run",
+        "eventIds": [
+          "copilot:9c9d090f-85f9-4ced-851b-01fcb5fd4e0d:start",
+          "copilot:model:claude-opus-4.6"
+        ],
+        "capturedAt": "2026-05-09T16:37:12.401Z"
+      }
+    },
+    {
+      "id": "mem:T2JzZXJ2ZWQgZG9jc19j",
+      "scope": "workspace",
+      "statement": "Observed docs_count=5",
+      "confidence": 0.7,
+      "provenance": {
+        "source": "dream-run",
+        "eventIds": [
+          "copilot:9c9d090f-85f9-4ced-851b-01fcb5fd4e0d:start",
+          "copilot:model:claude-opus-4.6"
+        ],
+        "capturedAt": "2026-05-09T16:37:12.401Z"
+      }
+    },
+    {
+      "id": "mem:T2JzZXJ2ZWQgc2Vzc2lv",
+      "scope": "workspace",
+      "statement": "Observed session_starts=1",
+      "confidence": 0.7,
+      "provenance": {
+        "source": "dream-run",
+        "eventIds": [
+          "copilot:9c9d090f-85f9-4ced-851b-01fcb5fd4e0d:start",
+          "copilot:model:claude-opus-4.6"
+        ],
+        "capturedAt": "2026-05-09T16:37:12.401Z"
+      }
+    }
+  ]
+}

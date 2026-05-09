@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: dreamer eval baseline
+
+prompts:
+  - file://prompts/memory-quality.txt
+
+providers:
+  - id: openai:chat:qwen3.6-35b-a3b-q3
+    config:
+      apiBaseUrl: ${HOSTED_LLM_BASE_URL}
+      apiKey: ${HOSTED_LLM_API_KEY}
+      temperature: 0
+      max_tokens: 800
+  - id: openai:chat:${LOCAL_LLAMA_MODEL}
+    config:
+      apiBaseUrl: ${LOCAL_LLAMA_BASE_URL}
+      apiKey: ${LOCAL_LLAMA_API_KEY}
+      temperature: 0
+      max_tokens: 800
+
+defaultTest:
+  assert:
+    - type: latency
+      threshold: 60000
+
+tests:
+  - vars:
+      transcript_excerpt: |
+        User asked to keep files under 150 LOC and enforce TDD.
+        Agent repeatedly exceeded file length and added no tests.
+      current_memory: |
+        - Use TDD.
+      expected_rule: |
+        Must preserve: file LOC target < 150 and TDD-first workflow.
+    assert:
+      - type: llm-rubric
+        value: Response preserves both constraints and explains concrete enforcement.
+      - type: contains-all
+        value:
+          - 150 LOC
+          - TDD
+  - vars:
+      transcript_excerpt: |
+        Earlier session says use provider A only.
+        Latest user says use provider B and keep provider-agnostic design.
+      current_memory: |
+        - Provider A is mandatory.
+      expected_rule: |
+        Detect contradiction and update with confidence/provenance guidance.
+    assert:
+      - type: llm-rubric
+        value: Response flags contradiction explicitly and avoids silent overwrite.
+
+# Optional per-run output gates:
+# promptfoo eval -c evals/promptfooconfig.yaml --max-concurrency 4

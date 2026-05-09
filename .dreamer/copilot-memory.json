@@ -1,0 +1,63 @@
+{
+  "version": "1",
+  "generatedAt": "2026-05-09T16:48:19.145Z",
+  "records": [
+    {
+      "id": "mem:T2JzZXJ2ZWQgcHJvdmlk",
+      "scope": "workspace",
+      "statement": "Observed provider_summary=Provider not configured. Using local fallback summary.",
+      "confidence": 0.9500000000000002,
+      "provenance": {
+        "source": "dream-run",
+        "eventIds": [
+          "conv-1:start",
+          "m-1"
+        ],
+        "capturedAt": "2026-05-09T16:36:03.816Z"
+      },
+      "citations": [
+        "conv-1:start",
+        "m-1"
+      ],
+      "validated": true
+    },
+    {
+      "id": "mem:T2JzZXJ2ZWQgZG9jc19j",
+      "scope": "workspace",
+      "statement": "Observed docs_count=5",
+      "confidence": 0.9500000000000002,
+      "provenance": {
+        "source": "dream-run",
+        "eventIds": [
+          "conv-1:start",
+          "m-1"
+        ],
+        "capturedAt": "2026-05-09T16:36:03.816Z"
+      },
+      "citations": [
+        "conv-1:start",
+        "m-1"
+      ],
+      "validated": true
+    },
+    {
+      "id": "mem:T2JzZXJ2ZWQgc2Vzc2lv",
+      "scope": "workspace",
+      "statement": "Observed session_starts=1",
+      "confidence": 0.9500000000000002,
+      "provenance": {
+        "source": "dream-run",
+        "eventIds": [
+          "conv-1:start",
+          "m-1"
+        ],
+        "capturedAt": "2026-05-09T16:36:03.816Z"
+      },
+      "citations": [
+        "conv-1:start",
+        "m-1"
+      ],
+      "validated": true
+    }
+  ]
+}
