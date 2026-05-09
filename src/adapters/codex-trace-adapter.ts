@@ -18,7 +18,8 @@ export class CodexTraceAdapter implements TranscriptAdapter {
 
   constructor(private readonly filePath: string) {}
 
-  async ingest(since?: string): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+  async ingest(checkpoint?: unknown): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+    const since = typeof checkpoint === "string" ? checkpoint : undefined;
     const rows = await readJsonLines(this.filePath).catch(() => []);
     const events = rows.map((row, index) => this.toEvent(row as CodexRow, index));
     const filtered = since ? events.filter((event) => event.timestamp > since) : events;

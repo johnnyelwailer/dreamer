@@ -14,7 +14,8 @@ export class BrowserTraceAdapter implements TranscriptAdapter {
 
   constructor(private readonly harPath: string) {}
 
-  async ingest(since?: string): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+  async ingest(checkpoint?: unknown): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+    const since = typeof checkpoint === "string" ? checkpoint : undefined;
     const root = await readJsonFile(this.harPath).catch(() => null);
     const entries = this.pickEntries(root);
     const events = entries.map((entry, index) => this.mapEntry(entry, index));

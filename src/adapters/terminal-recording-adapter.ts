@@ -11,7 +11,8 @@ export class TerminalRecordingAdapter implements TranscriptAdapter {
 
   constructor(private readonly castFilePath: string) {}
 
-  async ingest(since?: string): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+  async ingest(checkpoint?: unknown): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+    const since = typeof checkpoint === "string" ? checkpoint : undefined;
     const raw = await readFile(this.castFilePath, "utf8").catch(() => "");
     const lines = raw.split("\n").map((line) => line.trim()).filter(Boolean);
     if (lines.length <= 1) return { events: [], cursor: since };

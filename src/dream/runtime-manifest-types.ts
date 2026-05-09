@@ -80,6 +80,8 @@ type RuntimeEvalConfig = {
 export type RuntimeDiscoverySourceConfig = {
   mode: DiscoveryMode;
   searchPaths: string[];
+  lookbackDays?: number;
+  maxSessionsPerRun?: number;
 };
 
 type RuntimeDiscoveryConfig = {

@@ -18,10 +18,30 @@ program
   .description("Run one dream cycle")
   .option("--replay-from-start", "ignore saved cursor and ingest from the start")
   .option("--no-persist-state", "do not write .dreamer/state.json after this run")
-  .action(async (options: { replayFromStart?: boolean; persistState?: boolean }) => {
+  .option("--max-sessions <count|all>", "process at most N sessions per run (or all)")
+  .option("--since-days <days>", "only include sessions active in the last N days")
+  .action(async (options: { replayFromStart?: boolean; persistState?: boolean; maxSessions?: string; sinceDays?: string }) => {
+    let maxSessions: number | "all" | undefined;
+    if (options.maxSessions?.toLowerCase() === "all") {
+      maxSessions = "all";
+    } else if (options.maxSessions) {
+      const parsed = Number.parseInt(options.maxSessions, 10);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new Error("--max-sessions must be a positive integer or 'all'.");
+      }
+      maxSessions = parsed;
+    }
+
+    const sinceDays = options.sinceDays ? Number.parseFloat(options.sinceDays) : undefined;
+    if (sinceDays !== undefined && (!Number.isFinite(sinceDays) || sinceDays <= 0)) {
+      throw new Error("--since-days must be a positive number.");
+    }
+
     await runDream(cwd(), {
       replayFromStart: options.replayFromStart,
-      persistState: options.persistState
+      persistState: options.persistState,
+      maxSessions,
+      sinceDays
     });
   });
 

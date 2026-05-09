@@ -20,7 +20,8 @@ export class ClaudeCodeAdapter implements TranscriptAdapter {
 
   constructor(private readonly filePath: string) {}
 
-  async ingest(since?: string): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+  async ingest(checkpoint?: unknown): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+    const since = typeof checkpoint === "string" ? checkpoint : undefined;
     const lines = await readJsonLines(this.filePath).catch(() => []);
     const events = lines.map((line, idx) => this.mapLine(line as ClaudeLine, idx));
     const filtered = since ? events.filter((event) => event.timestamp > since) : events;

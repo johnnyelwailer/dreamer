@@ -16,6 +16,20 @@ type PipelineLogShape = {
   generatedAt?: string;
 };
 
+type StateShape = {
+  adapterProgress?: {
+    label?: string;
+    totalUnits?: number;
+    completedUnits?: number;
+    remainingUnits?: number;
+    completionPercent?: number;
+    processedThisRun?: number;
+    etaMinutes?: number;
+    details?: string;
+  };
+  lastRunAt?: string;
+};
+
 export async function runMetricsSummary(workspaceDir: string): Promise<void> {
   const metricsPath = join(workspaceDir, "reports", "metrics.json");
   if (!(await pathExists(metricsPath))) {
@@ -61,6 +75,26 @@ export async function runObservabilitySummary(workspaceDir: string): Promise<voi
       }
     } catch {
       console.log("\nCould not parse reports/pipeline-log.json.");
+    }
+  }
+
+  const statePath = join(workspaceDir, ".dreamer", "state.json");
+  if (await pathExists(statePath)) {
+    try {
+      const state = JSON.parse(await readFile(statePath, "utf8")) as StateShape;
+      const progress = state.adapterProgress;
+      if (progress) {
+        console.log("\nBacklog progress");
+        console.log(`- tracker: ${progress.label ?? "unknown"}`);
+        console.log(`- complete: ${progress.completedUnits ?? 0}/${progress.totalUnits ?? 0} (${progress.completionPercent ?? 0}%)`);
+        console.log(`- remaining: ${progress.remainingUnits ?? 0}`);
+        console.log(`- processed this run: ${progress.processedThisRun ?? 0}`);
+        if (progress.etaMinutes !== undefined) console.log(`- rough ETA: ${progress.etaMinutes} min`);
+        if (progress.details) console.log(`- details: ${progress.details}`);
+      }
+      if (state.lastRunAt) console.log(`- state updated: ${state.lastRunAt}`);
+    } catch {
+      console.log("\nCould not parse .dreamer/state.json.");
     }
   }
 

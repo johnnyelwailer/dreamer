@@ -16,7 +16,8 @@ export class JsonlEventAdapter implements TranscriptAdapter {
 
   constructor(private readonly filePath: string) {}
 
-  async ingest(since?: string): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+  async ingest(checkpoint?: unknown): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
+    const since = typeof checkpoint === "string" ? checkpoint : undefined;
     const lines = await this.safeReadLines();
     const parsed = lines.map((line, index) => this.mapLine(line, index));
     const filtered = since ? parsed.filter((event) => event.timestamp > since) : parsed;

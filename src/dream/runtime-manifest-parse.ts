@@ -1,4 +1,5 @@
-import type { RuntimeCopilotSdkByokConfig, RuntimeManifest } from "./runtime-manifest-types.js";
+import type { RuntimeManifest } from "./runtime-manifest-types.js";
+import { parseByokConfig } from "./runtime-manifest-byok-parse.js";
 function asString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim().length === 0) throw new Error(`Invalid runtime manifest field: ${field}`);
   return value;
@@ -45,37 +46,28 @@ function asStringArray(value: unknown, field: string): string[] {
   return value;
 }
 
-function parseByokConfig(sdk: Record<string, unknown>): RuntimeCopilotSdkByokConfig | undefined {
-  const providerMode = asEnum(sdk.providerMode, ["copilot", "byok"] as const, "provider.sdk.providerMode");
-  if (providerMode !== "byok") return undefined;
-
-  const byok = sdk.byok as Record<string, unknown> | undefined;
-  if (!byok) throw new Error("Invalid runtime manifest field: provider.sdk.byok");
-
-  const config: RuntimeCopilotSdkByokConfig = {
-    type: asEnum(byok.type, ["openai", "azure", "anthropic"] as const, "provider.sdk.byok.type"),
-    wireApi: asEnum(byok.wireApi, ["completions", "responses"] as const, "provider.sdk.byok.wireApi"),
-    baseUrl: asStringOrUndefined(byok.baseUrl, "provider.sdk.byok.baseUrl"),
-    baseUrlEnvVar: asStringOrUndefined(byok.baseUrlEnvVar, "provider.sdk.byok.baseUrlEnvVar"),
-    fallbackBaseUrlEnvVar: asStringOrUndefined(byok.fallbackBaseUrlEnvVar, "provider.sdk.byok.fallbackBaseUrlEnvVar"),
-    apiKeyEnvVar: asStringOrUndefined(byok.apiKeyEnvVar, "provider.sdk.byok.apiKeyEnvVar"),
-    fallbackApiKeyEnvVar: asStringOrUndefined(byok.fallbackApiKeyEnvVar, "provider.sdk.byok.fallbackApiKeyEnvVar"),
-    bearerTokenEnvVar: asStringOrUndefined(byok.bearerTokenEnvVar, "provider.sdk.byok.bearerTokenEnvVar"),
-    headers: byok.headers ? asRecordOfStrings(byok.headers, "provider.sdk.byok.headers") : undefined,
-    azureApiVersion: asStringOrUndefined(byok.azureApiVersion, "provider.sdk.byok.azureApiVersion")
-  };
-  if (!config.baseUrl && !config.baseUrlEnvVar) {
-    throw new Error("Invalid runtime manifest field: provider.sdk.byok.baseUrl or baseUrlEnvVar must be set");
-  }
-  return config;
-}
-
-function parseDiscoverySource(value: unknown, field: string): { mode: "append" | "override"; searchPaths: string[] } | undefined {
+function parseDiscoverySource(
+  value: unknown,
+  field: string
+): {
+  mode: "append" | "override";
+  searchPaths: string[];
+  lookbackDays?: number;
+  maxSessionsPerRun?: number;
+} | undefined {
   if (value === undefined) return undefined;
   const source = value as Record<string, unknown>;
   return {
     mode: source.mode ? asEnum(source.mode, ["append", "override"] as const, `${field}.mode`) : "append",
-    searchPaths: source.searchPaths ? asStringArray(source.searchPaths, `${field}.searchPaths`) : []
+    searchPaths: source.searchPaths ? asStringArray(source.searchPaths, `${field}.searchPaths`) : [],
+    lookbackDays:
+      source.lookbackDays === undefined
+        ? undefined
+        : asPositiveNumber(source.lookbackDays, `${field}.lookbackDays`),
+    maxSessionsPerRun:
+      source.maxSessionsPerRun === undefined
+        ? undefined
+        : asPositiveInteger(source.maxSessionsPerRun, `${field}.maxSessionsPerRun`)
   };
 }
 

@@ -16,8 +16,6 @@
     "eval:copilot-sdk": "tsx scripts/run-copilot-sdk-eval.ts",
     "eval:dream-quality": "node --import tsx scripts/run-safe-workspace.ts --command \"pnpm eval:dream-quality:unsafe\"",
     "eval:dream-quality:unsafe": "node --import tsx scripts/run-dream-quality-eval.ts",
-    "eval:dream-quality:tool": "node --import tsx scripts/run-safe-workspace.ts --command \"pnpm eval:dream-quality:tool:unsafe\"",
-    "eval:dream-quality:tool:unsafe": "DREAM_EVAL_JUDGE_MODE=tool-contract node --import tsx scripts/run-dream-quality-eval.ts",
     "eval:judge-comparison": "node --import tsx scripts/run-safe-workspace.ts --command \"pnpm eval:judge-comparison:unsafe\"",
     "eval:judge-comparison:unsafe": "node --import tsx scripts/run-dream-judge-comparison.ts",
     "improve:dream": "node --import tsx scripts/run-safe-workspace.ts --command \"pnpm improve:dream:unsafe\"",

@@ -19,6 +19,10 @@ export type DreamConfig = {
   stageOrder: string[];
   minSessions: number;
   copilotDebugSessionDir: string;
+  copilotDebugDiscoveryMode: "append" | "override";
+  copilotDebugSearchPaths: string[];
+  copilotDebugLookbackDays?: number;
+  copilotDebugMaxSessionsPerRun?: number;
   jsonlEventsPath: string;
   claudeCodePath: string;
   codexTracePath: string;
@@ -41,13 +45,26 @@ export type DreamConfig = {
   docsMaxEvents: number;
 };
 
+function readPositiveNumber(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function readPositiveInteger(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 export function readDreamConfig(workspaceDir: string): DreamConfig {
   const fixturesDir = join(workspaceDir, ".dreamer", "fixtures");
   const runtime = readRuntimeManifest(workspaceDir);
   const copilotSdkModel = process.env.COPILOT_SDK_MODEL ?? runtime.provider.defaultModel;
   const discoveredCopilotDebugSessionDir = discoverCopilotDebugSessionDir({
     searchPaths: runtime.discovery?.copilotDebug?.searchPaths,
-    mode: runtime.discovery?.copilotDebug?.mode
+    mode: runtime.discovery?.copilotDebug?.mode,
+    lookbackDays: runtime.discovery?.copilotDebug?.lookbackDays
   });
   const discoveredClaudeCodePath = discoverClaudeCodeLogPath({
     searchPaths: runtime.discovery?.claudeCode?.searchPaths,
@@ -67,6 +84,13 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
       process.env.COPILOT_DEBUG_SESSION_DIR ??
       discoveredCopilotDebugSessionDir ??
       join(fixturesDir, "copilot-session"),
+    copilotDebugDiscoveryMode: runtime.discovery?.copilotDebug?.mode ?? "append",
+    copilotDebugSearchPaths: runtime.discovery?.copilotDebug?.searchPaths ?? [],
+    copilotDebugLookbackDays:
+      readPositiveNumber(process.env.DREAM_COPILOT_LOOKBACK_DAYS) ?? runtime.discovery?.copilotDebug?.lookbackDays,
+    copilotDebugMaxSessionsPerRun:
+      readPositiveInteger(process.env.DREAM_COPILOT_MAX_SESSIONS_PER_RUN) ??
+      runtime.discovery?.copilotDebug?.maxSessionsPerRun,
     jsonlEventsPath: process.env.DREAM_JSONL_EVENTS_FILE ?? join(fixturesDir, "events.jsonl"),
     claudeCodePath:
       process.env.DREAM_CLAUDE_CODE_FILE ?? discoveredClaudeCodePath ?? join(fixturesDir, "claude-code.jsonl"),
