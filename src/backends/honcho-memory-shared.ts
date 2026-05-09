@@ -92,7 +92,7 @@ export function parseSnapshot(value: unknown): HonchoSnapshot | null {
   if (!counts || record.version !== SNAPSHOT_VERSION || typeof record.syncedAt !== "string") return null;
   if (typeof record.workspaceDir !== "string" || typeof record.workspaceId !== "string") return null;
   if (typeof record.sessionId !== "string" || !Array.isArray(record.records)) return null;
-  if (!["user", "workspace", "session"].some((scope) => typeof counts[scope] !== "number")) return null;
+  if (!["user", "workspace", "session"].every((scope) => typeof counts[scope] === "number")) return null;
   return record as HonchoSnapshot;
 }
 

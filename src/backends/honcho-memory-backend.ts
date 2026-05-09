@@ -1,164 +1,28 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { Honcho, type ConclusionCreateParams, type HonchoConfig } from "@honcho-ai/sdk";
+import { Honcho, type HonchoConfig } from "@honcho-ai/sdk";
 import type { MemoryBackend } from "../core/contracts.js";
 import type { MemoryRecord } from "../core/types.js";
-
-type MemoryScope = MemoryRecord["scope"];
-
-type HonchoSnapshot = {
-  version: string;
-  syncedAt: string;
-  workspaceDir: string;
-  workspaceId: string;
-  sessionId: string;
-  records: MemoryRecord[];
-  counts: Record<MemoryScope, number>;
-};
-
-type HonchoExport = HonchoSnapshot & {
-  peers: Array<{ id: string; role: string; scope?: MemoryScope }>;
-};
-
-type HonchoPageLike<T> = {
-  items: T[];
-  getNextPage?: () => Promise<HonchoPageLike<T> | null>;
-};
-
-type HonchoConclusionLike = {
-  id: string;
-  content: string;
-  sessionId: string | null;
-  createdAt: string;
-};
-
-type HonchoConclusionScopeLike = {
-  list: (options?: { page?: number; size?: number; reverse?: boolean }) => Promise<HonchoPageLike<HonchoConclusionLike>>;
-  create: (conclusions: ConclusionCreateParams | ConclusionCreateParams[]) => Promise<unknown>;
-  delete: (conclusionId: string) => Promise<void>;
-};
-
-type HonchoPeerLike = {
-  id: string;
-  getMetadata: () => Promise<Record<string, unknown>>;
-  setMetadata: (metadata: Record<string, unknown>) => Promise<void>;
-  conclusions: HonchoConclusionScopeLike;
-  conclusionsOf: (target: string | HonchoPeerLike) => HonchoConclusionScopeLike;
-};
-
-type HonchoSessionLike = {
-  id: string;
-  addPeers: (peers: unknown) => Promise<void>;
-  setMetadata: (metadata: Record<string, unknown>) => Promise<void>;
-};
-
-type HonchoClientLike = {
-  workspaceId: string;
-  getMetadata: () => Promise<Record<string, unknown>>;
-  setMetadata: (metadata: Record<string, unknown>) => Promise<void>;
-  peer: (
-    id: string,
-    options?: { metadata?: Record<string, unknown>; configuration?: { observeMe?: boolean | null } }
-  ) => Promise<HonchoPeerLike>;
-  session: (
-    id: string,
-    options?: { metadata?: Record<string, unknown>; configuration?: Record<string, unknown> }
-  ) => Promise<HonchoSessionLike>;
-};
-
-export type HonchoMemoryBackendOptions = {
-  workspaceId?: string;
-  apiKey?: string;
-  baseURL?: string;
-  environment?: HonchoConfig["environment"];
-  exportPath?: string;
-  createClient?: (config: HonchoConfig) => HonchoClientLike;
-};
-
-const DREAMER_METADATA_KEY = "dreamer";
-const SNAPSHOT_VERSION = "2";
-const DREAMER_PEER_ID = "dreamer";
-const SCOPE_PEERS: Record<MemoryScope, string> = {
-  user: "dreamer-user",
-  workspace: "dreamer-workspace",
-  session: "dreamer-session"
-};
+import {
+  buildSnapshot,
+  DREAMER_METADATA_KEY,
+  DREAMER_PEER_ID,
+  type HonchoClientLike,
+  type HonchoConclusionLike,
+  type HonchoConclusionScopeLike,
+  type HonchoExport,
+  type HonchoMemoryBackendOptions,
+  type HonchoPeerLike,
+  isMemoryScope,
+  parseLegacyExport,
+  parseSnapshot,
+  SCOPE_PEERS,
+  toConclusionContent
+} from "./honcho-memory-shared.js";
 
 function defaultWorkspaceId(workspaceDir: string): string {
   const candidate = basename(workspaceDir).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
   return candidate.length > 0 ? candidate : "dreamer";
-}
-
-function isMemoryRecordArray(value: unknown): value is MemoryRecord[] {
-  return Array.isArray(value);
-}
-
-function isMemoryScope(value: unknown): value is MemoryScope {
-  return value === "user" || value === "workspace" || value === "session";
-}
-
-function parseSnapshot(value: unknown): HonchoSnapshot | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  if (record.version !== SNAPSHOT_VERSION) return null;
-  if (typeof record.syncedAt !== "string") return null;
-  if (typeof record.workspaceDir !== "string") return null;
-  if (typeof record.workspaceId !== "string") return null;
-  if (typeof record.sessionId !== "string") return null;
-  if (!isMemoryRecordArray(record.records)) return null;
-  const counts = record.counts as Record<string, unknown> | undefined;
-  if (!counts) return null;
-  if (!["user", "workspace", "session"].every((scope) => typeof counts[scope] === "number")) return null;
-  return {
-    version: SNAPSHOT_VERSION,
-    syncedAt: record.syncedAt,
-    workspaceDir: record.workspaceDir,
-    workspaceId: record.workspaceId,
-    sessionId: record.sessionId,
-    records: record.records,
-    counts: {
-      user: Number(counts.user),
-      workspace: Number(counts.workspace),
-      session: Number(counts.session)
-    }
-  };
-}
-
-function buildSnapshot(workspaceDir: string, workspaceId: string, sessionId: string, records: MemoryRecord[]): HonchoSnapshot {
-  return {
-    version: SNAPSHOT_VERSION,
-    syncedAt: new Date().toISOString(),
-    workspaceDir,
-    workspaceId,
-    sessionId,
-    records,
-    counts: {
-      user: records.filter((record) => record.scope === "user").length,
-      workspace: records.filter((record) => record.scope === "workspace").length,
-      session: records.filter((record) => record.scope === "session").length
-    }
-  };
-}
-
-function parseLegacyExport(value: unknown): MemoryRecord[] | null {
-  if (Array.isArray(value)) return value as MemoryRecord[];
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  if (Array.isArray(record.records)) return record.records as MemoryRecord[];
-  if (Array.isArray(record.memory)) return record.memory as MemoryRecord[];
-  return null;
-}
-
-function toConclusionContent(record: MemoryRecord): string {
-  const payload = {
-    id: record.id,
-    scope: record.scope,
-    statement: record.statement,
-    confidence: record.confidence,
-    contradictoryTo: record.contradictoryTo,
-    provenance: record.provenance
-  };
-  return JSON.stringify(payload);
 }
 
 async function listAllConclusions(scope: HonchoConclusionScopeLike): Promise<HonchoConclusionLike[]> {
@@ -198,7 +62,8 @@ export class HonchoMemoryBackend implements MemoryBackend {
   }
 
   async load(): Promise<MemoryRecord[]> {
-    const snapshot = parseSnapshot((await this.getClient().getMetadata())[DREAMER_METADATA_KEY]);
+    const client = await this.getClient();
+    const snapshot = parseSnapshot((await client.getMetadata())[DREAMER_METADATA_KEY]);
     if (snapshot) {
       await this.writeExport(snapshot);
       return snapshot.records;
