@@ -7,9 +7,13 @@ if [[ -f .env.local ]]; then
   source .env.local
 fi
 
-if [[ -z "${HOSTED_LLM_BASE_URL:-}" ]]; then
-  echo "HOSTED_LLM_BASE_URL is required"
-  exit 1
+RUNTIME_MODE="$(node -e 'const fs=require("fs");const p=".dreamer/config/runtime.json";const c=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(c.provider?.sdk?.providerMode||"byok")')"
+
+if [[ "$RUNTIME_MODE" == "byok" ]]; then
+  if [[ -z "${COPILOT_SDK_BASE_URL:-}" && -z "${HOSTED_LLM_BASE_URL:-}" ]]; then
+    echo "BYOK mode requires COPILOT_SDK_BASE_URL or HOSTED_LLM_BASE_URL"
+    exit 1
+  fi
 fi
 
 # HOSTED_LLM_API_KEY is optional for keyless OpenAI-compatible endpoints.
