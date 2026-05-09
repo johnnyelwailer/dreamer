@@ -18,7 +18,10 @@ export async function readJsonLines(path: string): Promise<JsonRecord[]> {
 }
 
 export function parseIso(value: unknown, fallback = new Date(0).toISOString()): string {
-  if (typeof value === "number") return new Date(value).toISOString();
+  if (typeof value === "number") {
+    const millis = value < 10_000_000_000 ? value * 1000 : value;
+    return new Date(millis).toISOString();
+  }
   if (typeof value === "string") {
     const parsed = new Date(value);
     return Number.isNaN(parsed.valueOf()) ? fallback : parsed.toISOString();

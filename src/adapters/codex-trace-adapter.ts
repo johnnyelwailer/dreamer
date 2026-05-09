@@ -5,9 +5,11 @@ import { asEvent, parseIso, readJsonLines } from "./shared.js";
 type CodexRow = {
   id?: string;
   run_id?: string;
+  session_id?: string;
   ts?: string | number;
   kind?: string;
   content?: string;
+  text?: string;
 };
 
 export class CodexTraceAdapter implements TranscriptAdapter {
@@ -24,9 +26,10 @@ export class CodexTraceAdapter implements TranscriptAdapter {
   }
 
   private toEvent(row: CodexRow, index: number): NormalizedEvent {
-    const runId = row.run_id ?? "codex";
+    const runId = row.run_id ?? row.session_id ?? "codex";
     const kind = row.kind === "session_start" ? "session_start" : "message";
-    return asEvent("codex", row.id ?? `${runId}:${index}`, kind, parseIso(row.ts), row.content ?? "", {
+    const text = row.content ?? row.text ?? "";
+    return asEvent("codex", row.id ?? `${runId}:${index}`, kind, parseIso(row.ts), text, {
       rawKind: row.kind ?? "unknown"
     });
   }

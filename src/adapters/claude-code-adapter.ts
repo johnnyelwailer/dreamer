@@ -5,10 +5,13 @@ import { asEvent, parseIso, readJsonLines } from "./shared.js";
 type ClaudeLine = {
   id?: string;
   session_id?: string;
+  sessionId?: string;
   timestamp?: string | number;
   event?: string;
   role?: string;
   content?: string;
+  display?: string;
+  project?: string;
 };
 
 export class ClaudeCodeAdapter implements TranscriptAdapter {
@@ -25,12 +28,14 @@ export class ClaudeCodeAdapter implements TranscriptAdapter {
   }
 
   private mapLine(line: ClaudeLine, index: number): NormalizedEvent {
-    const sid = line.session_id ?? "claude";
+    const sid = line.session_id ?? line.sessionId ?? "claude";
     const id = line.id ?? `${sid}:${index}`;
     const kind = line.event === "session_start" ? "session_start" : "message";
-    return asEvent("claude-code", id, kind, parseIso(line.timestamp), line.content ?? "", {
+    const text = line.content ?? line.display ?? "";
+    return asEvent("claude-code", id, kind, parseIso(line.timestamp), text, {
       role: line.role ?? "unknown",
-      event: line.event ?? "unknown"
+      event: line.event ?? "unknown",
+      project: line.project ?? "unknown"
     });
   }
 }
