@@ -21,6 +21,7 @@ export type RuntimeCopilotSdkConfig = {
   authMode: CopilotSdkAuthMode;
   providerMode: CopilotSdkProviderMode;
   requestTimeoutMs: number;
+  infiniteSessionsEnabled?: boolean;
   gitHubTokenEnvVar?: string;
   sessionGitHubTokenEnvVar?: string;
   cliPathEnvVar?: string;

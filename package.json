@@ -10,11 +10,16 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "dream": "tsx src/cli.ts run",
+    "dream": "node --import tsx scripts/run-safe-workspace.ts --command \"pnpm dream:unsafe\"",
+    "dream:unsafe": "node --import tsx src/cli.ts run",
     "dream:schedule": "tsx src/cli.ts schedule --once",
     "eval:copilot-sdk": "tsx scripts/run-copilot-sdk-eval.ts",
-    "eval:dream-quality": "tsx scripts/run-dream-quality-eval.ts",
-    "improve:dream": "tsx scripts/run-dream-self-improve.ts"
+    "eval:dream-quality": "node --import tsx scripts/run-safe-workspace.ts --command \"pnpm eval:dream-quality:unsafe\"",
+    "eval:dream-quality:unsafe": "node --import tsx scripts/run-dream-quality-eval.ts",
+    "improve:dream": "node --import tsx scripts/run-safe-workspace.ts --command \"pnpm improve:dream:unsafe\"",
+    "improve:dream:unsafe": "node --import tsx scripts/run-dream-self-improve.ts",
+    "safe:improve:dream": "pnpm improve:dream",
+    "safe:eval:dream-quality": "pnpm eval:dream-quality"
   },
   "dependencies": {
     "@github/copilot-sdk": "^0.3.0",

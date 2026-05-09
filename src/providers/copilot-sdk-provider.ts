@@ -1,5 +1,5 @@
 import type { IntelligenceProvider } from "../core/contracts.js";
-import { CopilotClient, approveAll, type CopilotClientOptions, type ProviderConfig } from "@github/copilot-sdk";
+import { CopilotClient, approveAll, type CopilotClientOptions, type InfiniteSessionConfig, type ProviderConfig } from "@github/copilot-sdk";
 
 export const COPILOT_SDK_PROVIDER_NO_SUMMARY = "No summary returned.";
 export const COPILOT_SDK_PROVIDER_REQUEST_FAILED = "Copilot SDK provider request failed.";
@@ -15,6 +15,7 @@ export type CopilotSdkProviderOptions = {
   sessionConfig: {
     provider?: ProviderConfig;
     gitHubToken?: string;
+    infiniteSessions?: InfiniteSessionConfig;
   };
 };
 
@@ -53,6 +54,7 @@ export class CopilotSdkProvider implements IntelligenceProvider {
       model: this.options.model,
       provider: this.options.sessionConfig.provider,
       gitHubToken: this.options.sessionConfig.gitHubToken,
+      infiniteSessions: this.options.sessionConfig.infiniteSessions,
       onPermissionRequest: approveAll
     })) as CopilotSession;
 

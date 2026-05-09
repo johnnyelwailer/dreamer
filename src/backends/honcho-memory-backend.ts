@@ -1,42 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { Honcho, type HonchoConfig } from "@honcho-ai/sdk";
 import type { MemoryBackend } from "../core/contracts.js";
 import type { MemoryRecord } from "../core/types.js";
-import {
-  buildSnapshot,
-  DREAMER_METADATA_KEY,
-  DREAMER_PEER_ID,
-  type HonchoClientLike,
-  type HonchoConclusionLike,
-  type HonchoConclusionScopeLike,
-  type HonchoExport,
-  type HonchoMemoryBackendOptions,
-  type HonchoPeerLike,
-  isMemoryScope,
-  parseLegacyExport,
-  parseSnapshot,
-  SCOPE_PEERS,
-  toConclusionContent
-} from "./honcho-memory-shared.js";
-
-function defaultWorkspaceId(workspaceDir: string): string {
-  const candidate = basename(workspaceDir).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
-  return candidate.length > 0 ? candidate : "dreamer";
-}
-
-async function listAllConclusions(scope: HonchoConclusionScopeLike): Promise<HonchoConclusionLike[]> {
-  const collected: HonchoConclusionLike[] = [];
-  let page = await scope.list({ page: 1, size: 100, reverse: true });
-  while (true) {
-    collected.push(...page.items);
-    if (typeof page.getNextPage !== "function") break;
-    const nextPage = await page.getNextPage();
-    if (!nextPage) break;
-    page = nextPage;
-  }
-  return collected;
-}
+import { buildSnapshot, defaultWorkspaceId, DREAMER_METADATA_KEY, DREAMER_PEER_ID, type HonchoClientLike, type HonchoExport, type HonchoMemoryBackendOptions, type HonchoPeerLike, type HonchoSnapshot, listAllConclusions, type MemoryScope, isMemoryScope, parseLegacyExport, parseSnapshot, SCOPE_PEERS, toConclusionContent } from "./honcho-memory-shared.js";
 
 export class HonchoMemoryBackend implements MemoryBackend {
   readonly id = "backend.honcho.memory";
@@ -58,7 +25,7 @@ export class HonchoMemoryBackend implements MemoryBackend {
       baseURL: resolvedOptions?.baseURL,
       environment: resolvedOptions?.environment
     };
-    this.createClient = resolvedOptions?.createClient ?? ((config) => new Honcho(config));
+    this.createClient = resolvedOptions?.createClient ?? ((config) => new Honcho(config) as unknown as HonchoClientLike);
   }
 
   async load(): Promise<MemoryRecord[]> {
@@ -68,19 +35,16 @@ export class HonchoMemoryBackend implements MemoryBackend {
       await this.writeExport(snapshot);
       return snapshot.records;
     }
-
     return this.readLocalFallback();
   }
 
   async save(records: MemoryRecord[]): Promise<void> {
     const client = await this.getClient();
     const planner = await this.ensurePeer(client, DREAMER_PEER_ID, { role: "planner", managedBy: "dreamer" });
-    const scopePeers = await Promise.all(
-      Object.entries(SCOPE_PEERS).map(async ([scope, peerId]) => [
-        scope,
-        await this.ensurePeer(client, peerId, { role: "memory-scope", scope, managedBy: "dreamer" })
-      ])
-    );
+    const scopePeers = await Promise.all(Object.entries(SCOPE_PEERS).map(async ([scope, peerId]) => {
+      const peer = await this.ensurePeer(client, peerId, { role: "memory-scope", scope, managedBy: "dreamer" });
+      return [scope as MemoryScope, peer] as const;
+    }));
 
     const sessionId = `dreamer-sync-${Date.now()}`;
     const snapshot = buildSnapshot(this.workspaceDir, client.workspaceId, sessionId, records);
@@ -106,12 +70,10 @@ export class HonchoMemoryBackend implements MemoryBackend {
       recordCount: records.length,
       snapshot
     });
-
     for (const [, peer] of scopePeers) {
       const conclusions = await listAllConclusions(planner.conclusionsOf(peer));
       await Promise.all(conclusions.map((conclusion) => planner.conclusionsOf(peer).delete(conclusion.id)));
     }
-
     const scopedRecords = new Map<MemoryScope, MemoryRecord[]>();
     for (const record of records) {
       if (!isMemoryScope(record.scope)) continue;
@@ -119,7 +81,6 @@ export class HonchoMemoryBackend implements MemoryBackend {
       existing.push(record);
       scopedRecords.set(record.scope, existing);
     }
-
     for (const [scope, peer] of scopePeers) {
       const recordsForScope = scopedRecords.get(scope as MemoryScope) ?? [];
       if (!recordsForScope.length) continue;
@@ -127,13 +88,8 @@ export class HonchoMemoryBackend implements MemoryBackend {
         recordsForScope.map((record) => ({ content: toConclusionContent(record), sessionId }))
       );
     }
-
     const currentMetadata = await client.getMetadata();
-    await client.setMetadata({
-      ...currentMetadata,
-      [DREAMER_METADATA_KEY]: snapshot
-    });
-
+    await client.setMetadata({ ...currentMetadata, [DREAMER_METADATA_KEY]: snapshot });
     const payload: HonchoExport = {
       ...snapshot,
       peers: [{ id: planner.id, role: "planner" }].concat(
@@ -149,10 +105,7 @@ export class HonchoMemoryBackend implements MemoryBackend {
   }
 
   private async ensurePeer(client: HonchoClientLike, id: string, metadata: Record<string, unknown>): Promise<HonchoPeerLike> {
-    const peer = await client.peer(id, {
-      configuration: { observeMe: false },
-      metadata
-    });
+    const peer = await client.peer(id, { configuration: { observeMe: false }, metadata });
     const currentMetadata = await peer.getMetadata();
     await peer.setMetadata({ ...currentMetadata, ...metadata });
     return peer;

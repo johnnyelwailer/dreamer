@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { CopilotDebugAdapter } from "../../src/adapters/copilot-debug-adapter.js";
 import { JsonlEventAdapter } from "../../src/adapters/jsonl-event-adapter.js";
 
@@ -16,6 +19,68 @@ describe("CopilotDebugAdapter", () => {
     expect(first.events.length).toBeGreaterThan(0);
     const second = await adapter.ingest(first.cursor);
     expect(second.events.length).toBe(0);
+  });
+
+  it("ingests transcript messages and tool events when transcript artifacts exist", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dreamer-copilot-adapter-"));
+    const sessionId = "session-test";
+    const sessionDir = join(root, "GitHub.copilot-chat", "debug-logs", sessionId);
+    const transcriptsDir = join(root, "GitHub.copilot-chat", "transcripts");
+
+    try {
+      mkdirSync(sessionDir, { recursive: true });
+      mkdirSync(transcriptsDir, { recursive: true });
+
+      writeFileSync(
+        join(sessionDir, "main.jsonl"),
+        JSON.stringify({
+          ts: 1778345912364,
+          sid: sessionId,
+          type: "session_start",
+          attrs: { copilotVersion: "0.1", vscodeVersion: "1.0" }
+        }) + "\n",
+        "utf8"
+      );
+      writeFileSync(join(sessionDir, "models.json"), JSON.stringify([{ id: "model-x", vendor: "Vendor" }]), "utf8");
+      writeFileSync(
+        join(transcriptsDir, `${sessionId}.jsonl`),
+        [
+          JSON.stringify({
+            type: "user.message",
+            id: "u1",
+            timestamp: "2026-05-09T15:00:01.000Z",
+            data: { content: "Need diagnostics by transcript" }
+          }),
+          JSON.stringify({
+            type: "assistant.message",
+            id: "a1",
+            timestamp: "2026-05-09T15:00:02.000Z",
+            data: {
+              content: "",
+              toolRequests: [{ name: "read_file" }]
+            }
+          }),
+          JSON.stringify({
+            type: "tool.execution_start",
+            id: "t1",
+            timestamp: "2026-05-09T15:00:03.000Z",
+            data: { toolName: "read_file", toolCallId: "call-1" }
+          })
+        ].join("\n"),
+        "utf8"
+      );
+
+      const adapter = new CopilotDebugAdapter(sessionDir);
+      const result = await adapter.ingest();
+      const messageEvents = result.events.filter((event) => event.kind === "message");
+      const toolEvents = result.events.filter((event) => event.kind === "tool");
+
+      expect(messageEvents.length).toBeGreaterThan(0);
+      expect(toolEvents.length).toBeGreaterThan(0);
+      expect(result.events.some((event) => event.text.includes("diagnostics"))).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

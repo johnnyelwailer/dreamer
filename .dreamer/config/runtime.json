@@ -6,6 +6,7 @@
       "authMode": "none",
       "providerMode": "byok",
       "requestTimeoutMs": 120000,
+      "infiniteSessionsEnabled": false,
       "gitHubTokenEnvVar": "GITHUB_TOKEN",
       "sessionGitHubTokenEnvVar": "COPILOT_SDK_SESSION_GITHUB_TOKEN",
       "cliPathEnvVar": "COPILOT_SDK_CLI_PATH",

@@ -9,6 +9,8 @@ coverage/
 !.env.example
 .dreamer/memory.json
 .dreamer/state.json
+.dreamer/copilot-memory.json
+.dreamer/honcho/workspace.json
 docs/generated/
 reports/
 .pnpm-store/

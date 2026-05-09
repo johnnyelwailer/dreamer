@@ -24,7 +24,12 @@ import { SkillsStage } from "../stages/skills-stage.js";
 import { CopilotMemoryBackend } from "../backends/copilot-memory-backend.js";
 import { HonchoMemoryBackend } from "../backends/honcho-memory-backend.js";
 
-export async function runDream(workspaceDir: string): Promise<void> {
+export type RunDreamOptions = {
+  replayFromStart?: boolean;
+  persistState?: boolean;
+};
+
+export async function runDream(workspaceDir: string, options: RunDreamOptions = {}): Promise<void> {
   const runId = `run-${Date.now()}`;
   const config = readDreamConfig(workspaceDir);
   const registry = new PluginRegistry();
@@ -70,7 +75,8 @@ export async function runDream(workspaceDir: string): Promise<void> {
     const loaded = await backend.load();
     context.memories = loaded;
     const previousState = await state.read<{ cursor?: string }>({});
-    const ingest = await adapter.ingest(previousState.cursor);
+    const sinceCursor = options.replayFromStart ? undefined : previousState.cursor;
+    const ingest = await adapter.ingest(sinceCursor);
     context.events = ingest.events;
     context.metrics.sessionsProcessed = context.events.filter((event) => event.kind === "session_start").length;
     context.diary.push(`ingest:events=${context.events.length}`);
@@ -83,7 +89,9 @@ export async function runDream(workspaceDir: string): Promise<void> {
     }
     const sessions = context.events.filter((event) => event.kind === "session_start").length;
     if (sessions < config.minSessions) {
-      await state.write({ cursor: ingest.cursor ?? previousState.cursor ?? null, lastRunAt: context.nowIso });
+      if (options.persistState !== false) {
+        await state.write({ cursor: ingest.cursor ?? previousState.cursor ?? null, lastRunAt: context.nowIso });
+      }
       return;
     }
 
@@ -92,7 +100,9 @@ export async function runDream(workspaceDir: string): Promise<void> {
     const finalContext = await runPipeline(context, orderedStages);
     await writeProviderDocs(finalContext, provider, config);
     await backend.save(finalContext.memories);
-    await state.write({ cursor: ingest.cursor ?? null, lastRunAt: finalContext.nowIso });
+    if (options.persistState !== false) {
+      await state.write({ cursor: ingest.cursor ?? null, lastRunAt: finalContext.nowIso });
+    }
   } finally {
     const maybeDisposable = provider as IntelligenceProvider & { dispose?: () => Promise<void> };
     if (typeof maybeDisposable.dispose === "function") {

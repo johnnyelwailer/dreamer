@@ -8,7 +8,10 @@ function asStringOrUndefined(value: unknown, field: string): string | undefined 
   if (value === undefined) return undefined;
   return asString(value, field);
 }
-
+function asBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") throw new Error(`Invalid runtime manifest field: ${field}`);
+  return value;
+}
 function asRecordOfStrings(value: unknown, field: string): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`Invalid runtime manifest field: ${field}`);
   const entries = Object.entries(value as Record<string, unknown>);
@@ -19,27 +22,22 @@ function asRecordOfStrings(value: unknown, field: string): Record<string, string
   }
   return Object.fromEntries(entries) as Record<string, string>;
 }
-
 function asEnum<T extends string>(value: unknown, values: readonly T[], field: string): T {
   if (typeof value !== "string" || !values.includes(value as T)) throw new Error(`Invalid runtime manifest field: ${field}`);
   return value as T;
 }
-
 function asPositiveInteger(value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) throw new Error(`Invalid runtime manifest field: ${field}`);
   return value;
 }
-
 function asPositiveNumber(value: unknown, field: string): number {
   if (typeof value !== "number" || Number.isNaN(value) || value <= 0) throw new Error(`Invalid runtime manifest field: ${field}`);
   return value;
 }
-
 function asBoundedNumber(value: unknown, min: number, max: number, field: string): number {
   if (typeof value !== "number" || Number.isNaN(value) || value < min || value > max) throw new Error(`Invalid runtime manifest field: ${field}`);
   return value;
 }
-
 function asStringArray(value: unknown, field: string): string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.trim().length === 0)) {
     throw new Error(`Invalid runtime manifest field: ${field}`);
@@ -72,10 +70,7 @@ function parseByokConfig(sdk: Record<string, unknown>): RuntimeCopilotSdkByokCon
   return config;
 }
 
-function parseDiscoverySource(
-  value: unknown,
-  field: string
-): { mode: "append" | "override"; searchPaths: string[] } | undefined {
+function parseDiscoverySource(value: unknown, field: string): { mode: "append" | "override"; searchPaths: string[] } | undefined {
   if (value === undefined) return undefined;
   const source = value as Record<string, unknown>;
   return {
@@ -106,6 +101,10 @@ export function parseRuntimeManifestObject(parsed: unknown): RuntimeManifest {
         authMode: asEnum(sdk.authMode, ["none", "logged-in-user", "github-token", "session-github-token"] as const, "provider.sdk.authMode"),
         providerMode: asEnum(sdk.providerMode, ["copilot", "byok"] as const, "provider.sdk.providerMode"),
         requestTimeoutMs: asPositiveInteger(sdk.requestTimeoutMs, "provider.sdk.requestTimeoutMs"),
+        infiniteSessionsEnabled:
+          sdk.infiniteSessionsEnabled === undefined
+            ? undefined
+            : asBoolean(sdk.infiniteSessionsEnabled, "provider.sdk.infiniteSessionsEnabled"),
         gitHubTokenEnvVar: asStringOrUndefined(sdk.gitHubTokenEnvVar, "provider.sdk.gitHubTokenEnvVar"),
         sessionGitHubTokenEnvVar: asStringOrUndefined(sdk.sessionGitHubTokenEnvVar, "provider.sdk.sessionGitHubTokenEnvVar"),
         cliPathEnvVar: asStringOrUndefined(sdk.cliPathEnvVar, "provider.sdk.cliPathEnvVar"),

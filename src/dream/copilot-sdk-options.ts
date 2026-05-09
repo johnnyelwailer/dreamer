@@ -59,7 +59,8 @@ export function buildCopilotSdkProviderOptions(runtime: RuntimeManifest, model: 
   }
 
   const sessionConfig: CopilotSdkProviderOptions["sessionConfig"] = {
-    provider: buildSessionProviderConfig(runtime)
+    provider: buildSessionProviderConfig(runtime),
+    infiniteSessions: { enabled: runtime.provider.sdk.infiniteSessionsEnabled ?? false }
   };
   if (sdk.authMode === "session-github-token") {
     sessionConfig.gitHubToken = readEnvValue(sdk.sessionGitHubTokenEnvVar);

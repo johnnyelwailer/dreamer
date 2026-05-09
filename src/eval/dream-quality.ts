@@ -36,6 +36,7 @@ export type DreamQualityReport = {
 
 type RunQualityEvalOptions = {
   runDreamCycle: boolean;
+  replayTranscripts?: boolean;
 };
 
 export async function runDreamQualityEval(
@@ -43,7 +44,10 @@ export async function runDreamQualityEval(
   options: RunQualityEvalOptions
 ): Promise<DreamQualityReport> {
   if (options.runDreamCycle) {
-    await runDream(workspaceDir);
+    await runDream(workspaceDir, {
+      replayFromStart: options.replayTranscripts === true,
+      persistState: options.replayTranscripts === true ? false : undefined
+    });
   }
 
   const runtime = readRuntimeManifest(workspaceDir);

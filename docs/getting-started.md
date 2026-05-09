@@ -35,14 +35,18 @@ Open `.dreamer/config/runtime.json` and check:
 
 - `provider.sdk.providerMode`
 - `provider.sdk.authMode`
+- `provider.sdk.infiniteSessionsEnabled`
 
 Default is BYOK (`providerMode: byok`, `authMode: none`).
+Default session behavior is non-persistent (`infiniteSessionsEnabled: false`) so local Copilot session lists do not accumulate Dreamer runs.
 
 ## 5. Run Your First Dream Cycle
 
 ```bash
 pnpm dream
 ```
+
+This runs in an isolated git worktree on a dedicated branch by default.
 
 Expected outputs include:
 
@@ -64,6 +68,8 @@ Run dream-output quality eval:
 pnpm eval:dream-quality
 ```
 
+`eval:dream-quality` replays transcript ingestion by default so prior cursor state does not hide ingest failures.
+
 Outputs are written under `reports/evals/`.
 
 ## 7. Run Self-Improvement Loop
@@ -83,6 +89,21 @@ It updates:
 
 - `reports/evals/dream-self-improve.json`
 - `.dreamer/config/prompts/docs-improvement-hints.md` (when improvements are persisted)
+
+For branch-safe execution, run on isolated worktrees:
+
+```bash
+pnpm safe:eval:dream-quality
+pnpm safe:improve:dream
+```
+
+Unsafe direct-run variants (no worktree isolation):
+
+```bash
+pnpm dream:unsafe
+pnpm eval:dream-quality:unsafe
+pnpm improve:dream:unsafe
+```
 
 ## 8. Validate Locally
 

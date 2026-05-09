@@ -1,4 +1,5 @@
 import type { ConclusionCreateParams, HonchoConfig } from "@honcho-ai/sdk";
+import { basename } from "node:path";
 import type { MemoryRecord } from "../core/types.js";
 
 export type MemoryScope = MemoryRecord["scope"];
@@ -40,15 +41,13 @@ export type HonchoPeerLike = {
   getMetadata: () => Promise<Record<string, unknown>>;
   setMetadata: (metadata: Record<string, unknown>) => Promise<void>;
   conclusions: HonchoConclusionScopeLike;
-  conclusionsOf: (target: string | HonchoPeerLike) => HonchoConclusionScopeLike;
+  conclusionsOf: (target: string | { id: string }) => HonchoConclusionScopeLike;
 };
-
 export type HonchoSessionLike = {
   id: string;
   addPeers: (peers: unknown) => Promise<void>;
   setMetadata: (metadata: Record<string, unknown>) => Promise<void>;
 };
-
 export type HonchoClientLike = {
   workspaceId: string;
   getMetadata: () => Promise<Record<string, unknown>>;
@@ -80,6 +79,10 @@ export const SCOPE_PEERS: Record<MemoryScope, string> = {
   workspace: "dreamer-workspace",
   session: "dreamer-session"
 };
+export function defaultWorkspaceId(workspaceDir: string): string {
+  const candidate = basename(workspaceDir).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+  return candidate.length > 0 ? candidate : "dreamer";
+}
 
 export function isMemoryScope(value: unknown): value is MemoryScope {
   return value === "user" || value === "workspace" || value === "session";
@@ -130,4 +133,17 @@ export function toConclusionContent(record: MemoryRecord): string {
     contradictoryTo: record.contradictoryTo,
     provenance: record.provenance
   });
+}
+
+export async function listAllConclusions(scope: HonchoConclusionScopeLike): Promise<HonchoConclusionLike[]> {
+  const collected: HonchoConclusionLike[] = [];
+  let page = await scope.list({ page: 1, size: 100, reverse: true });
+  while (true) {
+    collected.push(...page.items);
+    if (typeof page.getNextPage !== "function") break;
+    const nextPage = await page.getNextPage();
+    if (!nextPage) break;
+    page = nextPage;
+  }
+  return collected;
 }
