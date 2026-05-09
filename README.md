@@ -16,8 +16,15 @@ It uses the official GitHub Copilot SDK runtime and supports multiple provider/a
 
 - `pnpm dream`: run one dream cycle.
 - `pnpm dream:schedule`: run scheduled dream cycles (currently once mode).
+- `pnpm dev setup init`: inspect provider/integration setup and referenced env vars.
+- `pnpm dev setup init --write-env`: append missing provider env placeholders to `.env.local`.
+- `pnpm dev setup doctor`: run configuration and integration diagnostics.
+- `pnpm dev metrics`: print latest pipeline metrics summary.
+- `pnpm dev observability`: inspect observability artifact health and latest run metadata.
 - `pnpm eval:copilot-sdk`: run provider response eval cases.
 - `pnpm eval:dream-quality`: run quality eval against generated dream artifacts.
+- `pnpm eval:dream-quality:tool`: run quality eval using Copilot SDK tool-contract judge.
+- `pnpm eval:judge-comparison`: run both legacy and tool-contract judges and write a comparison report.
 - `pnpm improve:dream`: run quality-driven self-improvement loop.
 - `pnpm safe:eval:dream-quality`: run quality eval in an isolated git worktree + dedicated branch.
 - `pnpm safe:improve:dream`: run self-improvement in an isolated git worktree + dedicated branch.
@@ -25,6 +32,13 @@ It uses the official GitHub Copilot SDK runtime and supports multiple provider/a
 - `pnpm build`: build CLI output.
 
 The quality-eval command replays transcripts from the start by default (`DREAM_EVAL_REPLAY_TRANSCRIPTS=1`) so stale cursor state does not mask ingestion failures.
+
+Judge modes:
+
+- `legacy-json`: strict JSON-in-prompt scoring (existing behavior).
+- `tool-contract`: Copilot SDK custom tool (`submit_quality_scores`) returns typed evaluation payload.
+
+Use `pnpm eval:judge-comparison` to produce `reports/evals/dream-judge-comparison.json` and `reports/evals/dream-judge-comparison.md` for side-by-side evidence.
 
 `dream`, `eval:dream-quality`, and `improve:dream` are safe-by-default and run in isolated git worktrees on dedicated branches.
 
