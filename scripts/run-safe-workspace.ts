@@ -108,10 +108,7 @@ function main(): void {
     stdio: "inherit",
     env: {
       ...process.env,
-      HOME: sandboxRoot,
-      USERPROFILE: sandboxRoot,
-      DREAMER_SAFE_WORKTREE: worktreeDir,
-      DREAMER_ORIGINAL_HOME: process.env.HOME ?? ""
+      DREAMER_SAFE_WORKTREE: worktreeDir
     }
   });
 
