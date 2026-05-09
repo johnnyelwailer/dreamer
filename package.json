@@ -12,10 +12,13 @@
     "lint": "eslint .",
     "dream": "tsx src/cli.ts run",
     "dream:schedule": "tsx src/cli.ts schedule --once",
-    "eval:copilot-sdk": "tsx scripts/run-copilot-sdk-eval.ts"
+    "eval:copilot-sdk": "tsx scripts/run-copilot-sdk-eval.ts",
+    "eval:dream-quality": "tsx scripts/run-dream-quality-eval.ts",
+    "improve:dream": "tsx scripts/run-dream-self-improve.ts"
   },
   "dependencies": {
     "@github/copilot-sdk": "^0.3.0",
+    "@honcho-ai/sdk": "^2.1.1",
     "commander": "^14.0.3",
     "zod": "^4.4.3"
   },
