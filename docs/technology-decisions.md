@@ -32,8 +32,8 @@
 
 ## LLM Provider Interface Style
 
-- OpenAI-compatible client as baseline transport.
-- Provider adapter for endpoint-specific auth and model naming.
+- GitHub Copilot SDK as the only runtime provider.
+- BYOK OpenAI-compatible routing through Copilot SDK provider config.
 - Strict timeout, retry, and response-shape validation.
 
 ## Guardrails

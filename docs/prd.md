@@ -18,7 +18,7 @@ The system runs locally by default, works across repositories and workspaces, an
 - Generate and maintain project-specific context.
 - Reconstruct missing specs and documentation for vibe-coded projects.
 - Improve agent skills and workflows over time.
-- Support multiple memory backends and intelligence providers.
+- Support multiple memory backends with a single Copilot SDK intelligence runtime.
 - Remain lightweight, local-first, and configurable.
 
 ## Non Goals
@@ -140,21 +140,11 @@ Use Honcho workspaces, peers, sessions, and reasoning primitives.
 
 ---
 
-# 3. Pluggable Intelligence Providers
+# 3. Copilot SDK Intelligence Runtime
 
-The actual reasoning and dreaming engine must be provider-agnostic.
+The default reasoning and dreaming engine runs through GitHub Copilot SDK only.
 
 ## Requirements
-
-### OpenAI-Compatible APIs
-
-Support:
-
-- Custom base URLs
-- API keys
-- Arbitrary OpenAI-compatible models
-- Self-hosted gateways
-- Local inference endpoints
 
 ### GitHub Copilot SDK
 
@@ -166,14 +156,6 @@ Support:
 - Routing dream prompts through Copilot SDK
 - BYOK provider routing to OpenAI-compatible endpoints via `provider.baseUrl` and `provider.apiKey`.
 - Local and self-hosted model endpoints through OpenAI-compatible protocol.
-
-### Future Providers
-
-- Anthropic Claude
-- Local models
-- Ollama
-- LM Studio
-- Custom providers
 
 ---
 
@@ -477,7 +459,7 @@ These rules are implementation constraints for all phases.
 
 - All integrations use contract-first interfaces and registries.
 - Core logic depends on abstractions, never concrete vendors.
-- New adapters/backends/providers must be add-only changes where possible.
+- New adapters/backends must be add-only changes where possible.
 - Plugin modules must be independently testable.
 
 ## 14.2 File Size Budget
@@ -734,7 +716,7 @@ This sequence prioritizes user-visible value early while keeping architecture mo
 
 - Strong contracts for pluggable boundaries.
 - Fast test cycles for Red -> Green -> Refactor.
-- Good ecosystem support for OpenAI-compatible providers and local endpoints.
+- Good ecosystem support for Copilot SDK BYOK routing and local endpoints.
 - Easy module splitting to keep files below 150 LOC.
 
 See: docs/technology-decisions.md
@@ -791,18 +773,18 @@ In this environment, sampled `main.jsonl` files are currently session-start-only
 
 ## Evals in This Environment
 
-Use available no-cost providers for evaluation runs:
+Use available no-cost endpoints for evaluation runs:
 
 - Hosted OpenAI-compatible endpoint from local untracked env vars
 - `qwen3.6-35b-a3b-q3`
 
-Optional local provider for side-by-side baseline:
+Optional local endpoint for side-by-side baseline:
 
 - llama.cpp OpenAI-compatible server
 
 Recommended approach:
 
-- Run the same fixture corpus against both providers.
+- Run the same fixture corpus against both endpoints.
 - Score memory quality, contradiction detection, doc completeness, latency, and stability.
 - Gate merges on minimum eval thresholds for critical slices.
 

@@ -21,7 +21,7 @@
 
 ### Deliverables
 
-- Plugin contracts for adapters, backends, providers, and stages.
+- Plugin contracts for adapters, backends, the Copilot SDK provider, and stages.
 - Registry for plugin discovery and binding.
 - Minimal dream command with stub plugins.
 
@@ -133,7 +133,7 @@
 
 - One additional adapter.
 - One additional memory backend.
-- One additional intelligence provider.
+- Keep Copilot SDK as the only intelligence provider.
 
 ### Tasks
 
