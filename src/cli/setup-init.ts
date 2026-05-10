@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { runtimeManifestPath } from "../dream/runtime-manifest.js";
 import { resolveAssetPath } from "../dream/dreamer-home.js";
+import { ttyWriteLine, ttyWriteTagged } from "../shared/tty-log-format.js";
 import { buildEnvSnapshot, collectProviderEnvVarNames, envValueSource } from "./env.js";
 import { pathExists } from "./shared.js";
 
@@ -15,25 +16,25 @@ export async function runSetupInit(workspaceDir: string, writeEnv: boolean): Pro
   // Bootstrap runtime.json from bundled defaults if missing
   if (!(await pathExists(runtimePath))) {
     await mkdir(join(runtimePath, ".."), { recursive: true });
-    const defaultConfig = readFileSync(resolveAssetPath("runtime.json"), "utf8");
+    const defaultConfig = readFileSync(resolveAssetPath("runtime-defaults.json"), "utf8");
     await writeFile(runtimePath, defaultConfig, "utf8");
-    console.log(`Created runtime config at ${runtimePath}`);
+    ttyWriteTagged("setup", `created runtime config at ${runtimePath}`);
   }
 
-  console.log("Setup summary");
-  console.log(`- runtime config: ${runtimePath}`);
-  console.log(`- env file: ${envPath} (${(await pathExists(envPath)) ? "present" : "missing"})`);
-  console.log(`- provider env vars referenced: ${envNames.length}`);
+  ttyWriteTagged("setup", "summary");
+  ttyWriteLine(`- runtime config: ${runtimePath}`);
+  ttyWriteLine(`- env file: ${envPath} (${(await pathExists(envPath)) ? "present" : "missing"})`);
+  ttyWriteLine(`- provider env vars referenced: ${envNames.length}`);
 
   for (const name of envNames) {
     const source = envValueSource(name, envSnapshot);
-    if (source === "process") console.log(`  - ${name}: set (process env)`);
-    else if (source === "dotenv") console.log(`  - ${name}: set (.env.local)`);
-    else console.log(`  - ${name}: unset`);
+    if (source === "process") ttyWriteLine(`  - ${name}: set (process env)`);
+    else if (source === "dotenv") ttyWriteLine(`  - ${name}: set (.env.local)`);
+    else ttyWriteLine(`  - ${name}: unset`);
   }
 
   if (!writeEnv) {
-    console.log("\nTip: run setup init with --write-env to append missing placeholders to .env.local.");
+    ttyWriteLine("\nTip: run setup init with --write-env to append missing placeholders to .env.local.");
     return;
   }
 
@@ -52,11 +53,11 @@ export async function runSetupInit(workspaceDir: string, writeEnv: boolean): Pro
 
   const missing = envNames.filter((name) => !declared.has(name));
   if (!missing.length) {
-    console.log("\nNo missing env placeholders. .env.local already declares all referenced vars.");
+    ttyWriteLine("\nNo missing env placeholders. .env.local already declares all referenced vars.");
     return;
   }
 
   const block = ["", "# Added by dreamer setup init", ...missing.map((name) => `${name}=`)].join("\n");
   await appendFile(envPath, block, "utf8");
-  console.log(`\nAppended ${missing.length} placeholder entries to ${envPath}.`);
+  ttyWriteLine(`\nAppended ${missing.length} placeholder entries to ${envPath}.`);
 }

@@ -115,12 +115,17 @@ type RuntimeDiscoveryConfig = {
   codexTrace?: RuntimeDiscoverySourceConfig;
 };
 
+type RuntimePluginsConfig = {
+  paths: string[];
+};
+
 export type RuntimeManifest = {
   provider: RuntimeProviderConfig;
   pipeline: RuntimePipelineConfig;
   docs: RuntimeDocsConfig;
   eval: RuntimeEvalConfig;
   discovery?: RuntimeDiscoveryConfig;
+  plugins?: RuntimePluginsConfig;
 };
 
 export type EvalCaseConfig = {

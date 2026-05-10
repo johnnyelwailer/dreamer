@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { workspaceStorageDir } from "../dream/dreamer-home.js";
+import { ttyWriteLine, ttyWriteTagged } from "../shared/tty-log-format.js";
 
 type EvalDimension = { id: string; score: number; rationale?: string };
 type EvalReport = {
@@ -36,7 +37,7 @@ export async function runInspectInsights(workspaceDir: string, json: boolean): P
   }
 
   if (!evalReport && !pipelineLog) {
-    console.log("No insights artifacts found. Run a dream cycle or quality eval first.");
+    ttyWriteTagged("inspect", "no insights artifacts found. Run a dream cycle or quality eval first", { stream: process.stderr });
     process.exitCode = 1;
     return;
   }
@@ -63,23 +64,23 @@ export async function runInspectInsights(workspaceDir: string, json: boolean): P
   };
 
   if (json) {
-    console.log(JSON.stringify(payload, null, 2));
+    ttyWriteLine(JSON.stringify(payload, null, 2));
     return;
   }
 
-  console.log("Inspect: insights");
+  ttyWriteTagged("inspect", "insights");
   if (payload.latestRun) {
-    console.log(`- latest run: ${payload.latestRun.runId ?? "unknown"} at ${payload.latestRun.generatedAt ?? "unknown"}`);
+    ttyWriteLine(`- latest run: ${payload.latestRun.runId ?? "unknown"} at ${payload.latestRun.generatedAt ?? "unknown"}`);
     if (payload.latestRun.providerSummary) {
-      console.log(`- provider summary: ${payload.latestRun.providerSummary.slice(0, 200)}`);
+      ttyWriteLine(`- provider summary: ${payload.latestRun.providerSummary.slice(0, 200)}`);
     }
   }
   if (payload.quality) {
-    console.log(`- quality: score=${payload.quality.weightedScore ?? 0} passed=${String(payload.quality.passed ?? false)}`);
+    ttyWriteLine(`- quality: score=${payload.quality.weightedScore ?? 0} passed=${String(payload.quality.passed ?? false)}`);
     for (const dimension of payload.quality.dimensions ?? []) {
-      console.log(`  - ${dimension.id}: ${dimension.score}`);
+      ttyWriteLine(`  - ${dimension.id}: ${dimension.score}`);
     }
-    for (const weakness of payload.quality.weaknesses?.slice(0, 5) ?? []) console.log(`  weakness: ${weakness}`);
-    for (const improvement of payload.quality.improvements?.slice(0, 5) ?? []) console.log(`  improve: ${improvement}`);
+    for (const weakness of payload.quality.weaknesses?.slice(0, 5) ?? []) ttyWriteLine(`  weakness: ${weakness}`);
+    for (const improvement of payload.quality.improvements?.slice(0, 5) ?? []) ttyWriteLine(`  improve: ${improvement}`);
   }
 }

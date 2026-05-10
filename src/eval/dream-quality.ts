@@ -8,7 +8,6 @@ import {
 } from "../dream/runtime-manifest.js";
 import { runDream } from "../dream/run-dream.js";
 import { createAdapter } from "../dream/adapter-factory.js";
-import { discoverCopilotDebugSessions } from "../dream/copilot-debug-session-discovery.js";
 import {
   buildRubricText,
   scoreReport
@@ -18,36 +17,9 @@ import { buildDreamQualityDiagnostics } from "./dream-quality-diagnostics.js";
 import { runToolContractJudge } from "./dream-quality-tool-judge.js";
 import { buildEvidenceToolingSection, resolveJudgeEvidenceFiles, resolveMemoryOutputFiles, resolveStagePromptFiles } from "./dream-quality-evidence.js";
 import { deriveJudgeErrorDiagnostics } from "./judge-error-diagnostics.js";
+import { sampleSessionPaths } from "./dream-quality-session-sampling.js";
 import { workspaceStorageDir } from "../dream/dreamer-home.js";
 import { createTtyStatus } from "../shared/tty-progress.js";
-
-/**
- * Pick a stratified sample: 1 long, 1 medium, 2 short — totalling ~4 sessions.
- * Falls back gracefully when fewer sessions exist.
- */
-function sampleSessionPaths(config: ReturnType<typeof readDreamConfig>): string[] | undefined {
-  if (config.adapterId !== "adapter.copilot.debug") return undefined;
-  const sessions = discoverCopilotDebugSessions({
-    searchPaths: config.copilotDebugSearchPaths,
-    mode: config.copilotDebugDiscoveryMode,
-    lookbackDays: config.copilotDebugLookbackDays
-  });
-  if (sessions.length <= 4) return undefined; // already small enough, no sampling needed
-  const sorted = [...sessions].sort((a, b) => a.transcriptLineCount - b.transcriptLineCount);
-  const n = sorted.length;
-  const sample: typeof sorted = [];
-  // 2 shortest
-  sample.push(sorted[0]);
-  if (n > 1) sample.push(sorted[1]);
-  // 1 median
-  const mid = Math.floor(n / 2);
-  const median = sorted[mid];
-  if (!sample.includes(median)) sample.push(median);
-  // 1 longest
-  const longest = sorted[n - 1];
-  if (!sample.includes(longest)) sample.push(longest);
-  return sample.map((s) => s.path);
-}
 
 type RunQualityEvalOptions = { replayTranscripts?: boolean };
 export async function runDreamQualityEval(
@@ -90,6 +62,9 @@ export async function runDreamQualityEval(
         return allowedSessionIds.has(fileBase);
       })
     : allEvidenceFiles;
+  const transcriptEvidencePaths = evidenceFiles
+    .filter((file) => file.kind === "transcript")
+    .map((file) => file.path);
   status.update(`evidence files=${evidenceFiles.length}`);
   const prompt = [
     promptTemplate.replaceAll("{{rubric}}", buildRubricText(rubric)),
@@ -127,7 +102,7 @@ export async function runDreamQualityEval(
     rubric,
     runtime.eval.quality.minPassingScore,
     config.copilotSdkModel,
-    evidenceFiles.map((f) => f.path)
+    transcriptEvidencePaths
   );
   report.judgeMode = "tool-contract";
   report.judgeToolUsed = judgeToolUsed;

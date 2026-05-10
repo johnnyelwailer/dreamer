@@ -11,15 +11,32 @@
 pnpm install
 ```
 
-## 3. Configure Environment
+## 3. Configure Dreamer
 
-Copy the template and set values locally:
+Run the setup wizard:
+
+```bash
+pnpm dev setup
+```
+
+In non-interactive environments, pass flags:
+
+```bash
+pnpm dev setup --yes \
+  --provider-mode byok \
+  --auth-mode none \
+  --model gpt-4o \
+  --base-url http://localhost:11434/v1 \
+  --no-verify
+```
+
+The wizard writes runtime config and `.env.local` fallbacks. You can still copy the template and edit values manually:
 
 ```bash
 cp .env.example .env.local
 ```
 
-At minimum for default BYOK mode, set one of:
+For BYOK mode, set one of:
 
 - `COPILOT_SDK_BASE_URL`
 - `HOSTED_LLM_BASE_URL`
@@ -31,14 +48,19 @@ Optional API key variables:
 
 ## 4. Verify Runtime Mode
 
-Open `.dreamer/config/runtime.json` and check:
+Run:
+
+```bash
+pnpm dev setup doctor
+```
+
+Check:
 
 - `provider.sdk.providerMode`
 - `provider.sdk.authMode`
 - `provider.sdk.infiniteSessionsEnabled`
 
-Default is BYOK (`providerMode: byok`, `authMode: none`).
-Default session behavior is non-persistent (`infiniteSessionsEnabled: false`) so local Copilot session lists do not accumulate Dreamer runs.
+Use `pnpm dev setup --verify` to run a small provider request against the selected settings.
 
 ## 5. Run Your First Dream Cycle
 

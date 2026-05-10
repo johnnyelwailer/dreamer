@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { readRuntimeManifest } from "./runtime-manifest.js";
 import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provider.js";
 import type { RuntimeStageAgentPackConfig } from "./runtime-manifest.js";
@@ -20,6 +21,7 @@ export type DreamConfig = {
   providerId: string;
   stageOrder: string[];
   stageAgentPacks?: Record<string, RuntimeStageAgentPackConfig>;
+  pluginPaths?: string[];
   minSessions: number;
   copilotDebugSessionDir: string;
   copilotDebugDiscoveryMode: "append" | "override";
@@ -60,10 +62,39 @@ function readPositiveInteger(value: string | undefined): number | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
+function readList(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function loadWorkspaceDotenv(workspaceDir: string): void {
+  const envPath = join(workspaceDir, ".env.local");
+  let raw: string;
+  try {
+    raw = readFileSync(envPath, "utf8");
+  } catch {
+    return;
+  }
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^([A-Z0-9_]+)=(.*)$/);
+    if (!match?.[1]) continue;
+    if (process.env[match[1]]) continue;
+    const value = (match[2] ?? "").trim().replace(/^['"]|['"]$/g, "");
+    if (value) process.env[match[1]] = value;
+  }
+}
+
 export function readDreamConfig(workspaceDir: string): DreamConfig {
+  loadWorkspaceDotenv(workspaceDir);
   const storageDir = workspaceStorageDir(workspaceDir);
   const fixturesDir = join(storageDir, "fixtures");
   const runtime = readRuntimeManifest(workspaceDir);
+  const stageOrderOverride = readList(process.env.DREAM_STAGE_ORDER);
   const copilotSdkModel = process.env.COPILOT_SDK_MODEL ?? runtime.provider.defaultModel;
   const discoveredCopilotDebugSessionDir = discoverCopilotDebugSessionDir({
     searchPaths: runtime.discovery?.copilotDebug?.searchPaths,
@@ -82,8 +113,9 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
     adapterId: process.env.DREAM_ADAPTER_ID ?? "adapter.copilot.debug",
     backendId: process.env.DREAM_BACKEND_ID ?? "backend.file.memory",
     providerId: process.env.DREAM_PROVIDER_ID ?? runtime.provider.id,
-    stageOrder: runtime.pipeline.stageOrder,
+    stageOrder: stageOrderOverride.length > 0 ? stageOrderOverride : runtime.pipeline.stageOrder,
     stageAgentPacks: runtime.pipeline.agentPacks,
+    pluginPaths: runtime.plugins?.paths ?? [],
     minSessions: Number(process.env.DREAM_MIN_SESSIONS ?? "1"),
     copilotDebugSessionDir:
       process.env.COPILOT_DEBUG_SESSION_DIR ??

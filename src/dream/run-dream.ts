@@ -25,6 +25,7 @@ import { CopilotMemoryBackend } from "../backends/copilot-memory-backend.js";
 import { HonchoMemoryBackend } from "../backends/honcho-memory-backend.js";
 import type { DreamRunState, RunDreamOptions } from "./run-dream-types.js";
 import { createTtyStatus } from "../shared/tty-progress.js";
+import { loadDreamerPlugins } from "./plugin-loader.js";
 
 export type { RunDreamOptions } from "./run-dream-types.js";
 
@@ -65,18 +66,24 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
     })
   );
   registry.registerProvider(new CopilotSdkProvider(config.copilotSdkProviderOptions));
+  registry.registerStage(new OrientationStage());
+  registry.registerStage(new DocumentationStage());
+  registry.registerStage(new SkillsStage());
+  registry.registerStage(new GovernanceStage());
+  registry.registerStage(new ObservabilityStage());
+
+  const loadedPlugins = await loadDreamerPlugins(registry, {
+    workspaceDir,
+    pluginPaths: config.pluginPaths
+  });
+  if (loadedPlugins.length > 0) status.update(`loaded plugins=${loadedPlugins.length}`);
 
   const adapter = registry.requireAdapter(config.adapterId);
   const backend = registry.requireBackend(config.backendId);
   const provider = registry.requireProvider(config.providerId);
   const state = new JsonStateStore(JsonStateStore.runStatePath(workspaceDir));
-  registry.registerStage(new OrientationStage());
   registry.registerStage(new SignalStage(provider, config.stageAgentPacks?.["stage.signal"]));
   registry.registerStage(new ConsolidationStage(provider, config.stageAgentPacks?.["stage.consolidation"]));
-  registry.registerStage(new DocumentationStage());
-  registry.registerStage(new SkillsStage());
-  registry.registerStage(new GovernanceStage());
-  registry.registerStage(new ObservabilityStage());
 
   try {
     const context = buildContext(workspaceDir, runId);

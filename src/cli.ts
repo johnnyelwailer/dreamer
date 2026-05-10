@@ -4,6 +4,7 @@ import { runDream } from "./dream/run-dream.js";
 import { runScheduled } from "./dream/schedule.js";
 import { runSetupInit } from "./cli/setup-init.js";
 import { runSetupDoctor } from "./cli/setup-doctor.js";
+import { runSetupWizard } from "./cli/setup-wizard.js";
 import { runMetricsSummary, runObservabilitySummary } from "./cli/reports.js";
 import { runInspectMemories } from "./cli/inspect-memories.js";
 import { runInspectInsights } from "./cli/inspect-insights.js";
@@ -56,6 +57,35 @@ program
   });
 
 const setupCommand = program.command("setup").description("Setup, integration checks, and provider onboarding helpers");
+
+setupCommand
+  .option("--yes", "run non-interactively with defaults and provided flags", false)
+  .option("--adapter <id>", "context provider adapter id")
+  .option("--adapter-path <path>", "plugin path that provides a custom adapter")
+  .option("--backend <id>", "memory backend id")
+  .option("--provider-mode <mode>", "copilot|byok")
+  .option("--auth-mode <mode>", "none|logged-in-user|github-token|session-github-token")
+  .option("--model <model>", "default model id")
+  .option("--base-url <url>", "BYOK endpoint base URL")
+  .option("--base-url-env <name>", "env var that provides the BYOK endpoint base URL")
+  .option("--api-key <key>", "BYOK API key to write to .env.local")
+  .option("--api-key-env <name>", "env var that provides the BYOK API key")
+  .option("--provider-type <type>", "openai|azure|anthropic")
+  .option("--wire-api <api>", "completions|responses")
+  .option("--context-length <tokens>", "model context window tokens")
+  .option("--prompt-tokens <tokens>", "max prompt tokens")
+  .option("--github-host <host>", "GitHub Enterprise host")
+  .option("--plugin-path <path>", "plugin path to add; repeatable", (value, previous: string[] = []) => [...previous, value], [])
+  .option("--provider-id <id>", "intelligence provider id")
+  .option("--stage-order <ids>", "comma-separated pipeline stage ids")
+  .option("--verify", "run provider verification after writing config", false)
+  .option("--no-verify", "skip provider verification")
+  .action(async (options) => {
+    await runSetupWizard(cwd(), {
+      ...options,
+      interactive: process.argv.slice(2).length === 1 && process.argv[2] === "setup"
+    });
+  });
 
 setupCommand
   .command("init")

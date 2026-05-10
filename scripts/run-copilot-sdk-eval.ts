@@ -6,6 +6,7 @@ import {
   CopilotSdkProvider
 } from "../src/providers/copilot-sdk-provider.js";
 import { readDreamConfig } from "../src/dream/config.js";
+import { ttyWriteLine, ttyWriteTagged } from "../src/shared/tty-log-format.js";
 import { createTtyStatus } from "../src/shared/tty-progress.js";
 
 type EvalResult = {
@@ -89,8 +90,8 @@ async function main(): Promise<void> {
     await mkdir(reportsDir, { recursive: true });
     await writeFile(outPath, JSON.stringify(summary, null, 2), "utf8");
 
-    console.log(JSON.stringify(summary, null, 2));
-    console.log(`saved_eval_report=${outPath}`);
+    ttyWriteLine(JSON.stringify(summary, null, 2));
+    ttyWriteTagged("eval:copilot-sdk", `saved_eval_report=${outPath}`);
     status.done(`finished passed=${passed}/${results.length}`);
     if (summary.failed > 0) process.exitCode = 1;
   } finally {

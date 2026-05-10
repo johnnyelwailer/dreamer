@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runConversationQualityEval } from "../src/eval/conversation-quality.js";
+import { ttyWriteLine } from "../src/shared/tty-log-format.js";
 
 // Auto-load .env.local
 try {
@@ -18,4 +19,4 @@ try {
 
 const workspaceDir = process.env.DREAMER_WORKSPACE_DIR ?? process.cwd();
 const report = await runConversationQualityEval(workspaceDir);
-console.log(JSON.stringify(report, null, 2));
+ttyWriteLine(JSON.stringify(report, null, 2));

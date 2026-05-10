@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { ttyWriteLine, ttyWriteTagged } from "../src/shared/tty-log-format.js";
 
 type SafeRunOptions = {
   command: string;
@@ -115,18 +116,19 @@ function main(): void {
     }
   });
 
-  console.log("\nSafe workspace run complete.");
-  console.log(`Branch: ${branch}`);
-  console.log(`Worktree: ${worktreeDir}`);
-  console.log(`Command: ${options.command}`);
+  ttyWriteLine();
+  ttyWriteTagged("safe workspace", "run complete");
+  ttyWriteLine(`Branch: ${branch}`);
+  ttyWriteLine(`Worktree: ${worktreeDir}`);
+  ttyWriteLine(`Command: ${options.command}`);
 
   if (!options.keepWorktree) {
     run("git", ["worktree", "remove", worktreeDir, "--force"], workspaceDir);
     run("git", ["branch", "-D", branch], workspaceDir);
     rmSync(sandboxRoot, { recursive: true, force: true });
-    console.log("Cleanup complete.");
+    ttyWriteTagged("safe workspace", "cleanup complete");
   } else {
-    console.log("Review changes in the isolated worktree before merging.");
+    ttyWriteTagged("safe workspace", "review changes in the isolated worktree before merging");
   }
 
   if (commandResult.status !== 0) {

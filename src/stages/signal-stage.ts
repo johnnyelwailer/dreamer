@@ -116,7 +116,7 @@ export class SignalStage implements PipelineStage {
         const runOptions = {
           streamTag: "signal main",
           retries: [
-            `Continue only on ${sessionFile}. Call record_insight for any remaining durable findings, then call finalize_signal_extraction before finishing.`
+            `Continue only on ${sessionFile}. Delegate evidence inspection with the task tool using agent_type explore, behavior-analyst, architecture-analyst, or failure-analyst. Do not call read_agent with guessed IDs. Call record_insight for any remaining durable findings, then call finalize_signal_extraction before finishing.`
           ],
           customAgents: sessionCustomAgents,
           defaultAgent: this.agentPack?.defaultAgent

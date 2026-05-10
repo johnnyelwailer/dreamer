@@ -75,6 +75,7 @@ export function parseRuntimeManifestObject(parsed: unknown): RuntimeManifest {
   const docs = root.docs as Record<string, unknown> | undefined;
   const evalConfig = root.eval as Record<string, unknown> | undefined;
   const discovery = root.discovery as Record<string, unknown> | undefined;
+  const plugins = root.plugins as Record<string, unknown> | undefined;
   if (!provider || !pipeline || !docs || !evalConfig) throw new Error("Invalid runtime manifest structure");
 
   const sdk = provider.sdk as Record<string, unknown> | undefined;
@@ -134,7 +135,11 @@ export function parseRuntimeManifestObject(parsed: unknown): RuntimeManifest {
           claudeCode: parseDiscoverySource(discovery.claudeCode, "discovery.claudeCode"),
           codexTrace: parseDiscoverySource(discovery.codexTrace, "discovery.codexTrace")
         }
+      : undefined,
+    plugins: plugins
+      ? {
+          paths: plugins.paths ? asStringArray(plugins.paths, "plugins.paths") : []
+        }
       : undefined
   };
 }
-

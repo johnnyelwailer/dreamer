@@ -14,8 +14,16 @@ const MAIN_SIGNAL_EXCLUDED_TOOLS = [
   "read_file",
   "get_message_details",
   "bash",
+  "list_bash",
+  "write_bash",
   "read_bash",
   "view",
+  "read_agent",
+  "web_fetch",
+  "report_intent",
+  "glob",
+  "grep",
+  "search",
   "grep_search",
   "file_search",
   "semantic_search",
@@ -169,8 +177,9 @@ describe("SignalStage delegated mode", () => {
       "finalize_signal_extraction"
     ]);
     expect(provider.calls[0]?.prompt).toContain("session-1.md");
-    expect(provider.calls[0]?.prompt).toContain("Delegate to specialist agents");
-    expect(provider.calls[0]?.prompt).toContain("The main signal agent should not call file or shell inspection tools directly");
+    expect(provider.calls[0]?.prompt).toContain("Your first evidence step must be native delegation with the `task` tool");
+    expect(provider.calls[0]?.prompt).toContain("Use only these `agent_type` values: `explore`, `behavior-analyst`");
+    expect(provider.calls[0]?.prompt).toContain("Do not use `general-purpose`, `read_agent`, `bash`, `list_bash`, `write_bash`, `glob`, `grep`, `search`");
   });
 
   it("loads packaged signal agent prompts when workspace templates are absent", async () => {

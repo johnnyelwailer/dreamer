@@ -1,6 +1,11 @@
 type ToolEventData = Record<string, unknown>;
 
 const PRIORITY_KEYS = [
+  "prompt",
+  "agent_type",
+  "agentType",
+  "name",
+  "description",
   "filePath",
   "path",
   "uri",
@@ -8,7 +13,6 @@ const PRIORITY_KEYS = [
   "pattern",
   "command",
   "tool",
-  "name"
 ] as const;
 
 function truncate(text: string, max: number): string {
@@ -35,11 +39,12 @@ function parseMaybeJson(value: unknown): unknown {
   }
 }
 
-function formatPrimitive(value: unknown): string {
+function formatPrimitive(key: string, value: unknown): string {
   if (typeof value === "string") {
     const clean = value.replace(/\s+/g, " ").trim();
     const maybePath = clean.startsWith("/") || clean.startsWith("~/") ? compactPath(clean) : clean;
-    return JSON.stringify(truncate(maybePath, 42));
+    const max = key === "prompt" ? 120 : 42;
+    return JSON.stringify(truncate(maybePath, max));
   }
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   if (value === null) return "null";
@@ -76,7 +81,16 @@ function pickArgObject(data: ToolEventData): Record<string, unknown> | undefined
 
   const direct = Object.fromEntries(
     Object.entries(data).filter(([key]) =>
-      key === "filePath" || key === "path" || key === "uri" || key === "query" || key === "pattern" || key === "command"
+      key === "agent_type" ||
+      key === "agentType" ||
+      key === "filePath" ||
+      key === "path" ||
+      key === "uri" ||
+      key === "query" ||
+      key === "pattern" ||
+      key === "command" ||
+      key === "description" ||
+      key === "prompt"
     )
   );
   return Object.keys(direct).length > 0 ? direct : undefined;
@@ -91,10 +105,10 @@ export function buildToolArgsPreview(data: ToolEventData | undefined): string {
   if (keys.length === 0) return "";
   const parts: string[] = [];
   for (const key of keys.slice(0, 5)) {
-    parts.push(`${key}=${formatPrimitive(argObject[key])}`);
+    parts.push(`${key}=${formatPrimitive(key, argObject[key])}`);
   }
   if (keys.length > 5) parts.push(`+${keys.length - 5} more`);
-  return truncate(parts.join(" "), 140);
+  return truncate(parts.join(" "), 220);
 }
 
 export function buildToolCallId(data: ToolEventData | undefined): string | undefined {

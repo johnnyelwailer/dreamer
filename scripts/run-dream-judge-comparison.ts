@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { runDreamQualityEval, type DreamQualityReport } from "../src/eval/dream-quality.js";
+import { ttyWriteLine } from "../src/shared/tty-log-format.js";
 
 type QualityReport = {
   generatedAt: string;
@@ -227,7 +228,7 @@ async function main(): Promise<void> {
   await writeFile(mdPath, markdown(report), "utf8");
   await writeFile(humanPath, conciseMarkdown(report), "utf8");
 
-  console.log(JSON.stringify(report, null, 2));
+  ttyWriteLine(JSON.stringify(report, null, 2));
 }
 
 await main();

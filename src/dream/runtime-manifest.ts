@@ -36,6 +36,28 @@ export function runtimeManifestPath(workspaceDir: string): string {
   return join(workspaceStorageDir(workspaceDir), "runtime.json");
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function mergeBundledAgentPacks(parsed: unknown): unknown {
+  const root = asRecord(parsed);
+  const pipeline = asRecord(root?.pipeline);
+  if (!root || !pipeline || pipeline.agentPacks !== undefined) return parsed;
+
+  const defaults = asRecord(JSON.parse(readFileSync(resolveAssetPath("runtime-defaults.json"), "utf8")) as unknown);
+  const defaultPipeline = asRecord(defaults?.pipeline);
+  if (defaultPipeline?.agentPacks === undefined) return parsed;
+
+  return {
+    ...root,
+    pipeline: {
+      ...pipeline,
+      agentPacks: defaultPipeline.agentPacks
+    }
+  };
+}
+
 export function readRuntimeManifest(workspaceDir: string): RuntimeManifest {
   const path = runtimeManifestPath(workspaceDir);
   let raw: string;
@@ -44,7 +66,7 @@ export function readRuntimeManifest(workspaceDir: string): RuntimeManifest {
   } catch {
     raw = readFileSync(resolveAssetPath("runtime-defaults.json"), "utf8");
   }
-  const parsed = JSON.parse(raw) as unknown;
+  const parsed = mergeBundledAgentPacks(JSON.parse(raw) as unknown);
   return parseRuntimeManifestObject(parsed);
 }
 

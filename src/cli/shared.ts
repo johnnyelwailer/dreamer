@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
+import { ttyWriteLine } from "../shared/tty-log-format.js";
 
 export type HealthStatus = "ok" | "warn" | "fail";
 
@@ -16,9 +17,9 @@ export function statusPrefix(status: HealthStatus): string {
 }
 
 export function printChecks(title: string, checks: HealthCheck[]): void {
-  console.log(`\n${title}`);
+  ttyWriteLine(`\n${title}`);
   for (const check of checks) {
-    console.log(`${statusPrefix(check.status)} ${check.label}: ${check.detail}`);
+    ttyWriteLine(`${statusPrefix(check.status)} ${check.label}: ${check.detail}`);
   }
 }
 

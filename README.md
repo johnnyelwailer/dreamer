@@ -16,6 +16,8 @@ It uses the official GitHub Copilot SDK runtime and supports multiple provider/a
 
 - `pnpm dream`: run one dream cycle.
 - `pnpm dream:schedule`: run scheduled dream cycles (currently once mode).
+- `pnpm dev setup`: run the interactive setup wizard when a TTY is available.
+- `pnpm dev setup --yes --provider-mode byok --model <model> --base-url <url> --no-verify`: configure Dreamer non-interactively for agent/bootstrap flows.
 - `pnpm dev setup init`: inspect provider/integration setup and referenced env vars.
 - `pnpm dev setup init --write-env`: append missing provider env placeholders to `.env.local`.
 - `pnpm dev setup doctor`: run configuration and integration diagnostics.
@@ -87,23 +89,57 @@ tsx scripts/run-safe-workspace.ts --command "pnpm improve:dream" --cleanup
 
 Runtime behavior is data-driven via:
 
-- `.dreamer/config/runtime.json`
+- the workspace runtime manifest under Dreamer storage
 - `.dreamer/config/prompts/`
 - `.dreamer/config/evals/`
 
 Environment variables are documented in `.env.example`.
+`dreamer setup` writes `.env.local` entries for selected adapter, backend, provider, plugins, and model limits. Runtime commands load non-empty `.env.local` values as fallbacks without overriding exported process env vars.
 
 When using `backend.honcho.memory`, configure Honcho access with `HONCHO_API_KEY` and `HONCHO_WORKSPACE_ID` or the `DREAM_HONCHO_*` overrides. Dreamer persists exact memory snapshots in Honcho workspace/session metadata and mirrors a local export under `.dreamer/honcho/workspace.json` for diagnostics.
 
+## Plugins
+
+Dreamer auto-loads JavaScript and TypeScript plugins from `.dreamer/plugins`, workspace storage plugins, `DREAMER_HOME/plugins`, and `DREAM_PLUGIN_PATHS`.
+
+Plugins can register custom transcript adapters, memory backends, intelligence providers, or pipeline stages. A custom dreaming system should register a `PipelineStage`; it receives the full `DreamContext` after conversation aggregation and memory loading.
+
+Use `DREAM_ADAPTER_ID`, `DREAM_BACKEND_ID`, `DREAM_PROVIDER_ID`, and `DREAM_STAGE_ORDER` to select plugin implementations at runtime. See [docs/plugins.md](docs/plugins.md) for examples.
+
 ## Provider/Auth Modes
 
-Configured in `.dreamer/config/runtime.json` under `provider.sdk`:
+Configured in the runtime manifest under `provider.sdk`:
 
 - `providerMode`: `byok` or `copilot`
 - `authMode`: `none`, `logged-in-user`, `github-token`, `session-github-token`
 - `infiniteSessionsEnabled`: `false` by default to avoid persisting Copilot SDK session state and cluttering session lists
 
 This supports BYOK endpoints, GitHub account auth, GHE host usage, and local OpenAI-compatible model endpoints.
+
+## Setup Wizard
+
+Run `pnpm dev setup` in a terminal for a guided setup across:
+
+- context providers: Copilot debug sessions, Codex history, Claude Code history, JSONL events, or a custom adapter plugin
+- dream pipeline: the built-in stage pipeline or custom stage ids from plugins
+- intelligence provider: Copilot SDK GitHub login, GitHub token modes, GHE host forwarding, or BYOK endpoint settings
+- memory system: local Dreamer memory, Copilot-style local memory, Honcho, or a custom backend plugin
+
+For automation, pass flags and `--yes`:
+
+```bash
+pnpm dev setup --yes \
+  --adapter adapter.copilot.debug \
+  --backend backend.file.memory \
+  --provider-mode byok \
+  --auth-mode none \
+  --model gpt-4o \
+  --base-url http://localhost:11434/v1 \
+  --context-length 65536 \
+  --no-verify
+```
+
+Use `--verify` to run a small provider request after writing config.
 
 ## Output Artifacts
 

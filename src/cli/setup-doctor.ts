@@ -2,6 +2,7 @@ import { join, relative } from "node:path";
 import { readDreamConfig } from "../dream/config.js";
 import { workspaceStorageDir } from "../dream/dreamer-home.js";
 import { readRuntimeManifest, runtimeManifestPath } from "../dream/runtime-manifest.js";
+import { ttyWriteLine } from "../shared/tty-log-format.js";
 import { buildEnvSnapshot, collectProviderEnvVarNames, envValue, envValueSource } from "./env.js";
 import { type HealthCheck, pathExists, printChecks } from "./shared.js";
 
@@ -77,6 +78,6 @@ export async function runSetupDoctor(workspaceDir: string, strict: boolean): Pro
   printChecks("Dreamer doctor", checks);
   const failCount = checks.filter((check) => check.status === "fail").length;
   const warnCount = checks.filter((check) => check.status === "warn").length;
-  console.log(`\nSummary: ${failCount} fail, ${warnCount} warn.`);
+  ttyWriteLine(`\nSummary: ${failCount} fail, ${warnCount} warn.`);
   if (failCount > 0 || (strict && warnCount > 0)) process.exitCode = 1;
 }

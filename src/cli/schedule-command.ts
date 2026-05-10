@@ -2,6 +2,7 @@ import { cwd } from "node:process";
 import { Command } from "commander";
 import type { PortableScheduleKind } from "../scheduling/durable-schedule.js";
 import { getDurableScheduleStatus, installDurableSchedule, removeDurableSchedule } from "../scheduling/durable-schedule.js";
+import { ttyWriteLine, ttyWriteTagged } from "../shared/tty-log-format.js";
 
 interface ScheduleOptions {
   install: boolean;
@@ -69,6 +70,6 @@ async function runScheduleAction(options: ScheduleOptions): Promise<void> {
 }
 
 function printDurableStatus(installed: boolean, platform: NodeJS.Platform, taskLabel: string, details?: string): void {
-  console.log(`Durable scheduler installed=${installed} platform=${platform} label=${taskLabel}`);
-  if (details) console.log(details);
+  ttyWriteTagged("schedule", `durable scheduler installed=${installed} platform=${platform} label=${taskLabel}`);
+  if (details) ttyWriteLine(details);
 }

@@ -1,4 +1,5 @@
 import type { DreamContext, MemoryRecord, NormalizedEvent } from "./types.js";
+import type { PluginRegistry } from "./registry.js";
 
 export type PluginId = string;
 
@@ -70,4 +71,19 @@ export type IntelligenceProvider = {
 export type PipelineStage = {
   id: PluginId;
   run: (context: DreamContext) => Promise<DreamContext>;
+};
+
+export type DreamerPluginContext = {
+  workspaceDir: string;
+  storageDir: string;
+};
+
+export type DreamerPluginRegistrar = (
+  registry: PluginRegistry,
+  context: DreamerPluginContext
+) => void | Promise<void>;
+
+export type DreamerPluginModule = {
+  registerDreamerPlugin?: DreamerPluginRegistrar;
+  default?: DreamerPluginRegistrar | { registerDreamerPlugin?: DreamerPluginRegistrar };
 };

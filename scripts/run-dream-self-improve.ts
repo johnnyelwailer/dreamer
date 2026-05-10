@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { runDreamQualityEval } from "../src/eval/dream-quality.js";
 import { readRuntimeManifest, resolveWorkspacePath } from "../src/dream/runtime-manifest.js";
+import { ttyWriteLine, ttyWriteTagged } from "../src/shared/tty-log-format.js";
 
 function normalizeHint(value: string): string {
   return value.trim().replace(/^-\s*/, "");
@@ -38,15 +39,15 @@ async function main(): Promise<void> {
   const workspaceDir = process.env.DREAMER_WORKSPACE_DIR ?? process.cwd();
   const runtime = readRuntimeManifest(workspaceDir);
 
-  console.log("[eval:dream-self-improve] running first quality eval");
+  ttyWriteTagged("eval:dream-self-improve", "running first quality eval");
   const before = await runDreamQualityEval(workspaceDir, { runDreamCycle: true });
   let persistedHints: string[] = [];
   let after = before;
 
   if (!before.passed && before.improvements.length > 0) {
-    console.log(`[eval:dream-self-improve] persisting ${before.improvements.length} improvement hints`);
+    ttyWriteTagged("eval:dream-self-improve", `persisting ${before.improvements.length} improvement hints`);
     persistedHints = await applyImprovements(workspaceDir, before.improvements);
-    console.log("[eval:dream-self-improve] running follow-up quality eval");
+    ttyWriteTagged("eval:dream-self-improve", "running follow-up quality eval");
     after = await runDreamQualityEval(workspaceDir, { runDreamCycle: true });
   }
 
@@ -69,8 +70,8 @@ async function main(): Promise<void> {
   await mkdir(dirname(outPath), { recursive: true });
   await writeFile(outPath, JSON.stringify(summary, null, 2), "utf8");
 
-  console.log(JSON.stringify(summary, null, 2));
-  console.log(`[eval:dream-self-improve] wrote report=${outPath}`);
+  ttyWriteLine(JSON.stringify(summary, null, 2));
+  ttyWriteTagged("eval:dream-self-improve", `wrote report=${outPath}`);
   if (!after.passed) process.exitCode = 1;
 }
 

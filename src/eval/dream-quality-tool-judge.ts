@@ -1,4 +1,4 @@
-import { CopilotClient, approveAll, type CopilotClientOptions } from "@github/copilot-sdk";
+import { CopilotClient, type CopilotClientOptions } from "@github/copilot-sdk";
 import { homedir } from "node:os";
 import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provider.js";
 import type { JudgeEvidenceFile } from "./dream-quality-evidence.js";
@@ -34,6 +34,16 @@ function isEnabled(raw: string | undefined): boolean {
   return value === "1" || value === "true" || value === "yes" || value === "on";
 }
 
+const ALLOWED_JUDGE_TOOLS = new Set(["submit_quality_scores", "list_quality_evidence_files", "read_quality_evidence_chunk", "search_quality_evidence"]);
+
+function judgePermissionDecision(request: unknown): { kind: "approve-once" } | { kind: "reject"; feedback: string } {
+  const candidate = request as { kind?: string; toolName?: string };
+  if (candidate.kind === "custom-tool" && candidate.toolName && ALLOWED_JUDGE_TOOLS.has(candidate.toolName)) {
+    return { kind: "approve-once" };
+  }
+  return { kind: "reject", feedback: "Judge session is restricted to quality evidence tools only." };
+}
+
 export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJudgeResult> {
   const client = new CopilotClient(input.providerOptions.clientOptions as Pick<CopilotClientOptions, "useLoggedInUser" | "gitHubToken" | "cliPath" | "cliUrl" | "env">);
   const status = createTtyStatus("[eval:dream-quality]");
@@ -45,7 +55,7 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
   let streamDeltaCount = 0;
   let firstStreamDeltaMs: number | undefined;
   const liveStream = isEnabled(process.env.DREAM_EVAL_LIVE_STREAM);
-  const streamHandler = createDreamAgentStreamHandler();
+  const streamHandler = createDreamAgentStreamHandler({ agentTag: "judge" });
 
   const tools = createEvidenceTools(input.evidenceFiles, input.rubricDimensionIds, (payload) => {
     captured = payload;
@@ -68,7 +78,7 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
       configDir: input.providerOptions.sessionConfig.configDir,
       // Use homedir so the agent's built-in file tools can reach transcript/memory paths
       workingDirectory: homedir(),
-      onPermissionRequest: approveAll,
+      onPermissionRequest: judgePermissionDecision,
       onEvent: (event) => {
         streamHandler?.(event);
         streamEventCount += 1;
@@ -80,7 +90,10 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
       tools
     })) as CopilotSession;
 
-    const firstPrompt = `${input.prompt}\n\nCall submit_quality_scores now with your complete evaluation results.`;
+    const firstPrompt =
+      `${input.prompt}\n\n` +
+      "Allowed tools in this session: list_quality_evidence_files, read_quality_evidence_chunk, search_quality_evidence, submit_quality_scores. " +
+      "Do not attempt bash/shell/python or any other tool. Call submit_quality_scores with complete results now.";
     let prompt = firstPrompt;
     const maxAttempts = Number(process.env.DREAM_EVAL_JUDGE_MAX_ATTEMPTS ?? "8");
 

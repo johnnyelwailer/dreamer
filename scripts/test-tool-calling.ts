@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CopilotClient, defineTool, approveAll, type CopilotClientOptions } from "@github/copilot-sdk";
 import { readDreamConfig } from "../src/dream/config.js";
+import { ttyWriteLine, ttyWriteTagged } from "../src/shared/tty-log-format.js";
 
 // Auto-load .env.local
 try {
@@ -25,12 +26,13 @@ const workspaceDir = process.cwd();
 const config = readDreamConfig(workspaceDir);
 const providerOptions = config.copilotSdkProviderOptions;
 
-console.log("[TEST] Provider config:", {
+ttyWriteTagged("test", "provider config");
+ttyWriteLine(JSON.stringify({
   model: providerOptions.model,
   baseUrl: providerOptions.sessionConfig.provider?.baseUrl ?? "(none - using copilot auth)",
   hasApiKey: Boolean(providerOptions.sessionConfig.provider?.apiKey),
   configDir: providerOptions.sessionConfig.configDir
-});
+}, null, 2));
 
 // Simple tool that the LLM should call
 let toolCallReceived = false;
@@ -45,7 +47,7 @@ const echoTool = defineTool("say_hello", {
   },
   skipPermission: true,
   handler: (params: { message: string }) => {
-    console.log("[TEST] ✅ Tool called! message =", params.message);
+    ttyWriteTagged("test", `tool called message=${params.message}`);
     toolCallReceived = true;
     return { textResultForLlm: "Hello received: " + params.message, resultType: "success" as const };
   }
@@ -54,38 +56,37 @@ const echoTool = defineTool("say_hello", {
 const client = new CopilotClient(providerOptions.clientOptions as Pick<CopilotClientOptions, "useLoggedInUser" | "gitHubToken" | "cliPath" | "cliUrl" | "env">);
 
 try {
-  console.log("[TEST] Starting client...");
+  ttyWriteTagged("test", "starting client");
   await client.start();
-  console.log("[TEST] Client started.");
+  ttyWriteTagged("test", "client started");
 
-  const sessionOptions: Record<string, unknown> = {
+  const sessionOptions: Parameters<typeof client.createSession>[0] = {
     model: providerOptions.model,
+    provider: providerOptions.sessionConfig.provider,
     infiniteSessions: providerOptions.sessionConfig.infiniteSessions,
     configDir: providerOptions.sessionConfig.configDir,
     workingDirectory: providerOptions.sessionConfig.workingDirectory,
     onPermissionRequest: approveAll,
     tools: [echoTool]
   };
-  if (providerOptions.sessionConfig.provider) {
-    sessionOptions.provider = providerOptions.sessionConfig.provider;
-  }
 
-  console.log("[TEST] Creating session with keys:", Object.keys(sessionOptions).join(", "));
+  ttyWriteTagged("test", `creating session with keys=${Object.keys(sessionOptions).join(", ")}`);
   const session = await client.createSession(sessionOptions) as {
     sendAndWait: (req: { prompt: string }, timeout?: number) => Promise<unknown>;
   };
-  console.log("[TEST] Session created.");
+  ttyWriteTagged("test", "session created");
 
   const prompt = "You MUST call the say_hello tool right now with message='hi from test'. Do not respond in text, only call the tool.";
-  console.log("[TEST] Sending prompt:", prompt);
+  ttyWriteTagged("test", `sending prompt=${prompt}`);
 
   const timeoutMs = 60_000;
   const response = await session.sendAndWait({ prompt }, timeoutMs);
-  console.log("[TEST] Response received:", JSON.stringify(response, null, 2));
-  console.log("[TEST] Tool was called:", toolCallReceived);
+  ttyWriteTagged("test", "response received");
+  ttyWriteLine(JSON.stringify(response, null, 2));
+  ttyWriteTagged("test", `tool was called=${String(toolCallReceived)}`);
 } catch (err) {
-  console.error("[TEST] ❌ Error:", err);
+  ttyWriteTagged("test", `error=${String(err)}`, { stream: process.stderr });
 } finally {
   await client.stop().catch(() => undefined);
-  console.log("[TEST] Done.");
+  ttyWriteTagged("test", "done");
 }
