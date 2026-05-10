@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import { ConsolidationStage } from "../../src/stages/consolidation-stage.js";
 import { buildContext } from "../../src/dream/build-context.js";
 import { createConsolidationTools } from "../../src/stages/consolidation-stage-tools.js";
+import type { IntelligenceProvider, RunAgentOptions } from "../../src/core/contracts.js";
+import type { RuntimeStageAgentPackConfig } from "../../src/dream/runtime-manifest.js";
 
 const stubProvider = {
   id: "provider.stub",
@@ -137,5 +139,55 @@ describe("ConsolidationStage", () => {
     } finally {
       await rm(workspaceDir, { recursive: true, force: true });
     }
+  });
+
+  it("passes consolidation specialist agents to the provider", async () => {
+    const calls: Array<{ prompt: string; options: RunAgentOptions }> = [];
+    const provider: IntelligenceProvider = {
+      id: "provider.test",
+      summarize: async () => "",
+      runAgent: async (prompt: string, _tools: unknown[], options: RunAgentOptions = {}) => {
+        calls.push({ prompt, options });
+        return "";
+      }
+    };
+    const pack: RuntimeStageAgentPackConfig = {
+      defaultAgent: { excludedTools: ["write_memory", "remove_memory"] },
+      customAgents: [
+        {
+          name: "contradiction-scope-reviewer",
+          tools: ["list_memories", "read_reference"],
+          promptTemplatePath: "prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
+          infer: true
+        },
+        {
+          name: "memory-editor",
+          tools: ["list_memories", "read_reference", "write_memory", "remove_memory"],
+          promptTemplatePath: "prompts/stages/consolidation/agents/memory-editor.md",
+          infer: false
+        }
+      ],
+      execution: { mode: "inferred" }
+    };
+    const stage = new ConsolidationStage(provider, pack);
+    const context = buildContext(process.cwd(), "run-agents");
+    context.memories.push({
+      id: "mem-1",
+      scope: "user",
+      statement: "Always commit and push after every change",
+      confidence: 0.8,
+      provenance: { source: "test", eventIds: [], capturedAt: context.nowIso }
+    });
+
+    await stage.run(context);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.options.defaultAgent).toEqual({ excludedTools: ["write_memory", "remove_memory"] });
+    expect(calls[0]?.options.customAgents?.map((agent) => agent.name)).toEqual([
+      "contradiction-scope-reviewer",
+      "memory-editor"
+    ]);
+    expect(calls[0]?.options.customAgents?.[0]?.prompt).toContain("conditional_compatibility");
+    expect(calls[0]?.options.customAgents?.[1]?.prompt).toContain("write_memory");
   });
 });

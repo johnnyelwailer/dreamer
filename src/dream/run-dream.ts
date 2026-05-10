@@ -72,7 +72,7 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
   const state = new JsonStateStore(JsonStateStore.runStatePath(workspaceDir));
   registry.registerStage(new OrientationStage());
   registry.registerStage(new SignalStage(provider, config.stageAgentPacks?.["stage.signal"]));
-  registry.registerStage(new ConsolidationStage(provider));
+  registry.registerStage(new ConsolidationStage(provider, config.stageAgentPacks?.["stage.consolidation"]));
   registry.registerStage(new DocumentationStage());
   registry.registerStage(new SkillsStage());
   registry.registerStage(new GovernanceStage());

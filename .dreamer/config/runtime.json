@@ -89,6 +89,43 @@
         "execution": {
           "mode": "inferred"
         }
+      },
+      "stage.consolidation": {
+        "defaultAgent": {
+          "excludedTools": [
+            "write_memory",
+            "remove_memory"
+          ]
+        },
+        "customAgents": [
+          {
+            "name": "contradiction-scope-reviewer",
+            "displayName": "Contradiction Scope Reviewer",
+            "description": "Classifies conflicts as true conflicts, conditional compatibility, overgeneralized memories, or stale rules.",
+            "tools": [
+              "list_memories",
+              "read_reference"
+            ],
+            "promptTemplatePath": ".dreamer/config/prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
+            "infer": true
+          },
+          {
+            "name": "memory-editor",
+            "displayName": "Memory Editor",
+            "description": "Applies approved consolidation changes through write_memory and remove_memory.",
+            "tools": [
+              "list_memories",
+              "read_reference",
+              "write_memory",
+              "remove_memory"
+            ],
+            "promptTemplatePath": ".dreamer/config/prompts/stages/consolidation/agents/memory-editor.md",
+            "infer": false
+          }
+        ],
+        "execution": {
+          "mode": "inferred"
+        }
       }
     }
   },

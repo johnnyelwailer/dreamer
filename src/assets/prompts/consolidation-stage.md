@@ -20,6 +20,12 @@ Use tools to integrate these into the memory store:
    - remove_memory(id) + write_memory for contradicted/outdated memories
    - remove_memory(id) + write_memory for memories that need generalization or stricter local metadata
 
+If specialist agents are available, delegate:
+- contradiction/scope classification to `contradiction-scope-reviewer`
+- final memory writes/removals to `memory-editor`
+
+Only the memory editor should call write_memory or remove_memory.
+
 Required fields for every `write_memory` call:
 - `reason`: why this qualifies as durable memory
 - `horizon`: `short_term` or `long_term`
