@@ -23,6 +23,7 @@ describe("ConsolidationStage", () => {
         const typedTools = tools as Array<{ name: string; handler: (args: Record<string, unknown>) => unknown }>;
         const writeTool = typedTools.find((t) => t.name === "write_memory");
         const listTool = typedTools.find((t) => t.name === "list_memories");
+        const finalizeTool = typedTools.find((t) => t.name === "finalize_consolidation");
         listTool?.handler({});
         writeTool?.handler({
           statement: "Use fast failing tests before refactors",
@@ -39,6 +40,10 @@ describe("ConsolidationStage", () => {
           horizon: "long_term",
           reason: "Repeated user correction showed this is a durable engineering practice.",
           references: [{ kind: "file", value: "docs/prd.md" }]
+        });
+        finalizeTool?.handler({
+          status: "completed",
+          summary: "Recorded durable testing preference and merged duplicates."
         });
         writeCount++;
         return "";
@@ -146,8 +151,11 @@ describe("ConsolidationStage", () => {
     const provider: IntelligenceProvider = {
       id: "provider.test",
       summarize: async () => "",
-      runAgent: async (prompt: string, _tools: unknown[], options: RunAgentOptions = {}) => {
+      runAgent: async (prompt: string, tools: unknown[], options: RunAgentOptions = {}) => {
         calls.push({ prompt, options });
+        const typedTools = tools as Array<{ name: string; handler: (args: Record<string, unknown>) => unknown }>;
+        const finalizeTool = typedTools.find((tool) => tool.name === "finalize_consolidation");
+        finalizeTool?.handler({ status: "no_changes_needed", summary: "No durable changes required after review." });
         return "";
       }
     };
@@ -189,5 +197,27 @@ describe("ConsolidationStage", () => {
     ]);
     expect(calls[0]?.options.customAgents?.[0]?.prompt).toContain("conditional_compatibility");
     expect(calls[0]?.options.customAgents?.[1]?.prompt).toContain("write_memory");
+  });
+
+  it("insists on finalize_consolidation and skips applying changes when verdict is missing", async () => {
+    const prompts: string[] = [];
+    const provider: IntelligenceProvider = {
+      id: "provider.test",
+      summarize: async () => "",
+      runAgent: async (prompt: string) => {
+        prompts.push(prompt);
+        return "";
+      }
+    };
+
+    const stage = new ConsolidationStage(provider);
+    const context = buildContext(process.cwd(), "run-no-verdict");
+    context.insights = [{ statement: "Use concise status updates", scope: "workspace" }];
+    const result = await stage.run(context);
+
+    expect(prompts.length).toBe(2);
+    expect(result.diary).toContain("consolidation:missing_final_verdict=1");
+    expect(result.diary).toContain("consolidation:user_message=Consolidation must call finalize_consolidation to finish.");
+    expect(result.diary.some((line) => line.startsWith("consolidation:memories_added="))).toBe(false);
   });
 });

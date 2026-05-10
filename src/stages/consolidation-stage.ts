@@ -4,8 +4,12 @@ import type { IntelligenceProvider, PipelineStage } from "../core/contracts.js";
 import { resolveAssetPath, workspaceStorageDir } from "../dream/dreamer-home.js";
 import type { DreamContext, InsightRecord } from "../core/types.js";
 import type { RuntimeStageAgentPackConfig } from "../dream/runtime-manifest.js";
+import {
+  buildConsolidationCustomAgents,
+  requestConsolidationFinalVerdict,
+  runConsolidationAgentPasses
+} from "./consolidation-agent-pack.js";
 import { createConsolidationTools } from "./consolidation-stage-tools.js";
-import { loadStageTemplate, renderStageTemplate } from "./stage-agent-templates.js";
 
 function formatInsights(insights: InsightRecord[]): string {
   if (!insights.length) return "(none - only review and prune existing memories)";
@@ -71,7 +75,7 @@ export class ConsolidationStage implements PipelineStage {
 
     const runDir = join(workspaceStorageDir(context.workspaceDir), "runs", context.runId);
     const orientationPath = join(runDir, "orientation.md");
-    const { tools, applyChanges } = createConsolidationTools(
+    const { tools, applyChanges, hasFinalVerdict, getFinalVerdict } = createConsolidationTools(
       context.memories,
       context.nowIso,
       context.insights,
@@ -80,49 +84,36 @@ export class ConsolidationStage implements PipelineStage {
       runDir
     );
     const prompt = await loadPrompt(context.insights, orientationPath);
-    const customAgents = this.agentPack
-      ? await Promise.all(
-          this.agentPack.customAgents.map(async (agent) => ({
-            name: agent.name,
-            displayName: agent.displayName,
-            description: agent.description,
-            tools: agent.tools,
-            infer: agent.infer,
-            prompt: renderStageTemplate(
-              await loadStageTemplate(
-                context.workspaceDir,
-                agent.promptTemplatePath,
-                "Review all memories and produce consolidation recommendations."
-              ),
-              { run_dir: runDir, orientation_path: orientationPath }
-            )
-          }))
-        )
-      : undefined;
-    const explicitSequence =
-      this.agentPack?.execution?.mode === "explicit-sequence" ? this.agentPack.execution.explicitSequence ?? [] : [];
+    const customAgents = await buildConsolidationCustomAgents(
+      this.agentPack,
+      context.workspaceDir,
+      runDir,
+      orientationPath
+    );
 
     try {
-      const runOptions = {
-        streamTag: "consolidation agent",
-        retries: [
-          "Finish consolidation. Write any remaining memories and call remove_memory for anything contradicted."
-        ],
-        customAgents,
-        defaultAgent: this.agentPack?.defaultAgent
-      };
-      if (customAgents && explicitSequence.length > 0) {
-        const customAgentByName = new Map(customAgents.map((agent) => [agent.name, agent]));
-        for (const agentName of explicitSequence) {
-          const selectedAgent = customAgentByName.get(agentName);
-          if (!selectedAgent) continue;
-          await this.provider.runAgent(selectedAgent.prompt, tools, { ...runOptions, selectedAgent: agentName, retries: [] });
-        }
-      } else {
-        await this.provider.runAgent(prompt, tools, runOptions);
-      }
+      await runConsolidationAgentPasses(this.provider, prompt, tools, this.agentPack, customAgents);
     } catch (error) {
       context.diary.push(`consolidation:agent_error=${String(error).slice(0, 120)}`);
+    }
+
+    if (!hasFinalVerdict()) {
+      try {
+        await requestConsolidationFinalVerdict(this.provider, tools, this.agentPack, customAgents);
+      } catch (error) {
+        context.diary.push(`consolidation:agent_error=${String(error).slice(0, 120)}`);
+      }
+    }
+
+    if (!hasFinalVerdict()) {
+      context.diary.push("consolidation:missing_final_verdict=1");
+      context.diary.push("consolidation:user_message=Consolidation must call finalize_consolidation to finish.");
+      return context;
+    }
+
+    const finalVerdict = getFinalVerdict();
+    if (finalVerdict) {
+      context.diary.push(`consolidation:final_status=${finalVerdict.status}`);
     }
 
     applyChanges(context);
