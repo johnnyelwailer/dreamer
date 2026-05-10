@@ -17,6 +17,10 @@ export type {
   DreamQualityRubricConfig,
   EvalCaseConfig,
   RuntimeDiscoverySourceConfig,
+  RuntimeDefaultAgentConfig,
+  RuntimeCustomAgentConfig,
+  RuntimeAgentPackExecutionConfig,
+  RuntimeStageAgentPackConfig,
   RuntimeCopilotSdkByokConfig,
   RuntimeCopilotSdkConfig,
   RuntimeManifest

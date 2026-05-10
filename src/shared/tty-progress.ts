@@ -1,4 +1,5 @@
 import { clearLine, cursorTo } from "node:readline";
+import { ttyFormatTagged } from "./tty-log-format.js";
 
 export type TtyStatus = {
   update: (message: string) => void;
@@ -10,6 +11,8 @@ type StatusEntry = {
   id: number;
   prefix: string;
   message: string;
+  noisy: boolean;
+  noPrefix: boolean;
 };
 
 const interactive = Boolean(process.stderr.isTTY && process.env.CI !== "true");
@@ -34,17 +37,17 @@ function renderTop(): void {
   for (let i = activeStack.length - 1; i >= 0; i -= 1) {
     const entry = entries.get(activeStack[i] ?? -1);
     if (!entry) continue;
-    renderLine(`${entry.prefix} ${entry.message}`);
+    renderLine(entry.noPrefix ? entry.message : ttyFormatTagged(entry.prefix, entry.message, { noisy: entry.noisy }));
     return;
   }
   clearLine(process.stderr, 0);
   cursorTo(process.stderr, 0);
 }
 
-export function createTtyStatus(prefix: string): TtyStatus {
+export function createTtyStatus(prefix: string, options: { noisy?: boolean; noPrefix?: boolean } = {}): TtyStatus {
   const id = nextId;
   nextId += 1;
-  entries.set(id, { id, prefix, message: "" });
+  entries.set(id, { id, prefix, message: "", noisy: options.noisy === true, noPrefix: options.noPrefix === true });
 
   return {
     update(message) {
@@ -64,7 +67,7 @@ export function createTtyStatus(prefix: string): TtyStatus {
       entries.delete(id);
       if (!interactive) return;
       if (wasTop && activeStack.length === 0) {
-        renderLine(`${prefix} ${message}`);
+        renderLine(entry.noPrefix ? message : ttyFormatTagged(prefix, message, { noisy: entry.noisy }));
         process.stderr.write("\n");
         return;
       }

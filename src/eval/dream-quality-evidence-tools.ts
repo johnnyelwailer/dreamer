@@ -37,13 +37,14 @@ export function createEvidenceTools(
     },
     skipPermission: true,
     handler: async (args) => {
-      const path = typeof args.path === "string" ? args.path : "";
+      const input = (args ?? {}) as Record<string, unknown>;
+      const path = typeof input.path === "string" ? input.path : "";
       if (!allowedEvidencePaths.has(path)) {
         return { textResultForLlm: "Path not allowed.", resultType: "error" };
       }
       const lines = await readLines(path);
-      const startLine = clamp(Math.floor(Number(args.startLine) || 1), 1, Math.max(lines.length, 1));
-      const endLine = clamp(Math.floor(Number(args.endLine) || startLine), startLine, Math.max(lines.length, startLine));
+      const startLine = clamp(Math.floor(Number(input.startLine) || 1), 1, Math.max(lines.length, 1));
+      const endLine = clamp(Math.floor(Number(input.endLine) || startLine), startLine, Math.max(lines.length, startLine));
       const slice = lines.slice(startLine - 1, endLine).map((line, index) => ({
         line: startLine + index,
         text: line
@@ -68,9 +69,10 @@ export function createEvidenceTools(
     },
     skipPermission: true,
     handler: async (args) => {
-      const path = typeof args.path === "string" ? args.path : "";
-      const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
-      const limit = clamp(Math.floor(Number(args.limit) || 12), 1, 50);
+      const input = (args ?? {}) as Record<string, unknown>;
+      const path = typeof input.path === "string" ? input.path : "";
+      const query = typeof input.query === "string" ? input.query.trim().toLowerCase() : "";
+      const limit = clamp(Math.floor(Number(input.limit) || 12), 1, 50);
       if (!allowedEvidencePaths.has(path)) {
         return { textResultForLlm: "Path not allowed.", resultType: "error" };
       }
@@ -106,8 +108,18 @@ export function createEvidenceTools(
     },
     skipPermission: true,
     handler: (args) => {
-      onScoresCapture(validatePayload(args, rubricDimensionIds));
-      return { textResultForLlm: "Scores accepted.", resultType: "success" };
+      try {
+        onScoresCapture(validatePayload(args as Record<string, unknown>, rubricDimensionIds));
+        return { textResultForLlm: "Scores accepted.", resultType: "success" };
+      } catch (error) {
+        return {
+          textResultForLlm:
+            `submit_quality_scores validation failed: ${String(error)}. ` +
+            `Expected all rubric ids exactly once: ${rubricDimensionIds.join(", ")}. ` +
+            "Score range must be between 0 and 1.",
+          resultType: "error"
+        };
+      }
     }
   });
 

@@ -131,19 +131,9 @@ export function toConclusionContent(record: MemoryRecord): string {
     statement: record.statement,
     confidence: record.confidence,
     contradictoryTo: record.contradictoryTo,
-    provenance: record.provenance
+    provenance: record.provenance,
+    context: record.context,
+    evidence: record.evidence,
+    capture: record.capture
   });
-}
-
-export async function listAllConclusions(scope: HonchoConclusionScopeLike): Promise<HonchoConclusionLike[]> {
-  const collected: HonchoConclusionLike[] = [];
-  let page = await scope.list({ page: 1, size: 100, reverse: true });
-  while (true) {
-    collected.push(...page.items);
-    if (typeof page.getNextPage !== "function") break;
-    const nextPage = await page.getNextPage();
-    if (!nextPage) break;
-    page = nextPage;
-  }
-  return collected;
 }

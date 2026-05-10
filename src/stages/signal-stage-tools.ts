@@ -1,12 +1,15 @@
 import { defineTool } from "@github/copilot-sdk";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { MEMORY_CATEGORIES, type InsightRecord } from "../core/types.js";
+import { EVIDENCE_ITEM_SCHEMA, REFERENCE_ITEM_SCHEMA, normalizeEvidence, normalizeReferences, normalizeTags, parseCategory, parseHorizon } from "./memory-tool-shared.js";
 import type { WrittenSession } from "./signal-stage-file-writer.js";
 
 export function createSignalTools(
   runDir: string,
   sessions: WrittenSession[],
-  onInsight: (statement: string, scope: "user" | "workspace") => void
+  onInsight: (insight: InsightRecord) => void,
+  sessionHint?: { sessionId?: string }
 ) {
   function safePath(p: string): string | null {
     const abs = resolve(p);
@@ -25,7 +28,7 @@ export function createSignalTools(
       required: ["path"]
     },
     skipPermission: true,
-    handler: async (args) => {
+    handler: async (args: Record<string, unknown>) => {
       const abs = safePath(String(args.path ?? ""));
       if (!abs) return { textResultForLlm: "Path not allowed.", resultType: "error" as const };
       try {
@@ -54,7 +57,7 @@ export function createSignalTools(
       required: ["session", "from_msg"]
     },
     skipPermission: true,
-    handler: (args) => {
+    handler: (args: Record<string, unknown>) => {
       const s = sessions[Number(args.session ?? 1) - 1];
       if (!s) return { textResultForLlm: "Session not found.", resultType: "error" as const };
       const from = Math.max(1, Number(args.from_msg) || 1);
@@ -76,21 +79,62 @@ export function createSignalTools(
   });
 
   const recordInsight = defineTool("record_insight", {
-    description: "Record a durable, actionable insight extracted from the sessions.",
+    description: "Record a durable, actionable insight with optional context (category, tags, rationale, evidence).",
     parameters: {
       type: "object",
       properties: {
         statement: { type: "string" },
-        scope: { type: "string", enum: ["user", "workspace"] }
+        scope: { type: "string", enum: ["user", "workspace"] },
+        category: { type: "string", enum: [...MEMORY_CATEGORIES] },
+        tags: { type: "array", items: { type: "string" } },
+        rationale: { type: "string", description: "Why this is durable and worth keeping." },
+        applies_when: { type: "string", description: "Context where this memory applies." },
+        horizon: { type: "string", enum: ["short_term", "long_term"] },
+        expires_at: { type: "string", description: "ISO timestamp for expiry. Usually used for short_term." },
+        reason: { type: "string", description: "Reason this should be stored as memory." },
+        references: {
+          type: "array",
+          items: REFERENCE_ITEM_SCHEMA
+        },
+        evidence: {
+          type: "array",
+          items: EVIDENCE_ITEM_SCHEMA
+        }
       },
       required: ["statement", "scope"]
     },
     skipPermission: true,
-    handler: (args) => {
+    handler: (args: Record<string, unknown>) => {
       const statement = String(args.statement ?? "").trim().slice(0, 200);
       const scope = args.scope === "workspace" ? "workspace" : ("user" as const);
       if (statement.length < 10) return { textResultForLlm: "Too short.", resultType: "error" as const };
-      onInsight(statement, scope);
+      const category = parseCategory(args.category);
+      const tags = normalizeTags(args.tags);
+      const rationale = String(args.rationale ?? "").trim().slice(0, 240);
+      const appliesWhen = String(args.applies_when ?? "").trim().slice(0, 180);
+      const horizon = parseHorizon(args.horizon);
+      const expiresAt = String(args.expires_at ?? "").trim().slice(0, 40);
+      const reason = String(args.reason ?? "").trim().slice(0, 240);
+      const references = normalizeReferences(args.references);
+      const evidence = normalizeEvidence(args.evidence) ?? (sessionHint?.sessionId ? [{ sessionId: sessionHint.sessionId }] : undefined);
+
+      onInsight({
+        statement,
+        scope,
+        context: {
+          category,
+          tags,
+          rationale: rationale.length >= 12 ? rationale : undefined,
+          appliesWhen: appliesWhen.length >= 8 ? appliesWhen : undefined
+        },
+        evidence,
+        capture: {
+          horizon,
+          expiresAt: expiresAt.length >= 16 ? expiresAt : undefined,
+          reason: reason.length >= 12 ? reason : undefined,
+          references
+        }
+      });
       return { textResultForLlm: "Insight recorded.", resultType: "success" as const };
     }
   });

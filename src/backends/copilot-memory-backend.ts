@@ -28,7 +28,10 @@ export class CopilotMemoryBackend implements MemoryBackend {
         statement: record.statement,
         confidence: record.confidence,
         provenance: record.provenance,
-        contradictoryTo: record.contradictoryTo
+        contradictoryTo: record.contradictoryTo,
+        context: record.context,
+        evidence: record.evidence,
+        capture: record.capture
       }));
     } catch {
       return [];

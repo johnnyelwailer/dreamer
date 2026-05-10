@@ -2,13 +2,46 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { IntelligenceProvider, PipelineStage } from "../core/contracts.js";
 import { resolveAssetPath, workspaceStorageDir } from "../dream/dreamer-home.js";
-import type { DreamContext } from "../core/types.js";
+import type { DreamContext, InsightRecord } from "../core/types.js";
 import { createConsolidationTools } from "./consolidation-stage-tools.js";
 
-async function loadPrompt(insights: string[], orientationPath: string): Promise<string> {
+function formatInsights(insights: InsightRecord[]): string {
+  if (!insights.length) return "(none - only review and prune existing memories)";
+  return insights
+    .map((insight, index) => {
+      const parts = [`${index + 1}. statement: ${insight.statement}`, `   scope: ${insight.scope}`];
+      if (insight.context?.category) parts.push(`   category: ${insight.context.category}`);
+      if (insight.context?.tags?.length) parts.push(`   tags: ${insight.context.tags.join(", ")}`);
+      if (insight.context?.rationale) parts.push(`   rationale: ${insight.context.rationale}`);
+      if (insight.context?.appliesWhen) parts.push(`   applies_when: ${insight.context.appliesWhen}`);
+      if (insight.capture?.horizon) parts.push(`   horizon: ${insight.capture.horizon}`);
+      if (insight.capture?.expiresAt) parts.push(`   expires_at: ${insight.capture.expiresAt}`);
+      if (insight.capture?.reason) parts.push(`   reason: ${insight.capture.reason}`);
+      if (insight.capture?.references?.length) {
+        const references = insight.capture.references.map((ref) => `${ref.kind}:${ref.value}`).join("; ");
+        parts.push(`   references: ${references}`);
+      }
+      if (insight.evidence?.length) {
+        const evidence = insight.evidence
+          .map((item) => {
+            const fields: string[] = [];
+            if (item.sessionId) fields.push(`session_id=${item.sessionId}`);
+            if (item.fromMessage) fields.push(`from=${item.fromMessage}`);
+            if (item.toMessage) fields.push(`to=${item.toMessage}`);
+            return fields.length ? fields.join(" ") : "unscoped";
+          })
+          .join("; ");
+        parts.push(`   evidence: ${evidence}`);
+      }
+      return parts.join("\n");
+    })
+    .join("\n");
+}
+
+async function loadPrompt(insights: InsightRecord[], orientationPath: string): Promise<string> {
   const insightList = insights.length
-    ? insights.map((s, i) => `${i + 1}. ${s}`).join("\n")
-    : "(none — only review and prune existing memories)";
+    ? formatInsights(insights)
+    : "(none - only review and prune existing memories)";
   try {
     const template = await readFile(resolveAssetPath("prompts/consolidation-stage.md"), "utf8");
     return template.replace("{{insights}}", insightList).replace("{{orientation_path}}", orientationPath);
@@ -37,9 +70,11 @@ export class ConsolidationStage implements PipelineStage {
     const prompt = await loadPrompt(context.insights, orientationPath);
 
     try {
-      await this.provider.runAgent(prompt, tools, [
-        "Finish consolidation. Write any remaining memories and call remove_memory for anything contradicted."
-      ]);
+      await this.provider.runAgent(prompt, tools, {
+        retries: [
+          "Finish consolidation. Write any remaining memories and call remove_memory for anything contradicted."
+        ]
+      });
     } catch (error) {
       context.diary.push(`consolidation:agent_error=${String(error).slice(0, 120)}`);
     }

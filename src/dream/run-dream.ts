@@ -43,7 +43,8 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
       maxSessionsPerRun:
         options.maxSessions === "all"
           ? undefined
-          : options.maxSessions ?? config.copilotDebugMaxSessionsPerRun
+          : options.maxSessions ?? config.copilotDebugMaxSessionsPerRun,
+      sessionPathAllowlist: options.sessionPathAllowlist
     })
   );
   registry.registerAdapter(new JsonlEventAdapter(config.jsonlEventsPath));
@@ -70,7 +71,7 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
   const provider = registry.requireProvider(config.providerId);
   const state = new JsonStateStore(JsonStateStore.runStatePath(workspaceDir));
   registry.registerStage(new OrientationStage());
-  registry.registerStage(new SignalStage(provider));
+  registry.registerStage(new SignalStage(provider, config.stageAgentPacks?.["stage.signal"]));
   registry.registerStage(new ConsolidationStage(provider));
   registry.registerStage(new DocumentationStage());
   registry.registerStage(new SkillsStage());

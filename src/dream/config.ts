@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { readRuntimeManifest } from "./runtime-manifest.js";
 import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provider.js";
+import type { RuntimeStageAgentPackConfig } from "./runtime-manifest.js";
 import { buildCopilotSdkProviderOptions } from "./copilot-sdk-options.js";
 import { discoverCopilotDebugSessionDir } from "./copilot-debug-session-discovery.js";
 import { discoverClaudeCodeLogPath, discoverCodexTraceLogPath } from "./adapter-log-discovery.js";
@@ -18,6 +19,7 @@ export type DreamConfig = {
   backendId: string;
   providerId: string;
   stageOrder: string[];
+  stageAgentPacks?: Record<string, RuntimeStageAgentPackConfig>;
   minSessions: number;
   copilotDebugSessionDir: string;
   copilotDebugDiscoveryMode: "append" | "override";
@@ -81,6 +83,7 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
     backendId: process.env.DREAM_BACKEND_ID ?? "backend.file.memory",
     providerId: process.env.DREAM_PROVIDER_ID ?? runtime.provider.id,
     stageOrder: runtime.pipeline.stageOrder,
+    stageAgentPacks: runtime.pipeline.agentPacks,
     minSessions: Number(process.env.DREAM_MIN_SESSIONS ?? "1"),
     copilotDebugSessionDir:
       process.env.COPILOT_DEBUG_SESSION_DIR ??

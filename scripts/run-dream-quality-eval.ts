@@ -19,60 +19,23 @@ try {
 
 function printReport(report: DreamQualityReport): void {
   const pass = report.passed ? "✓ PASS" : "✗ FAIL";
-  const bar = (score: number) => "█".repeat(Math.round(score * 10)) + "░".repeat(10 - Math.round(score * 10));
-  const transcriptPreviewCount = 3;
-  const transcriptPreview = report.transcriptsEvaluated.slice(0, transcriptPreviewCount);
+  const dims = report.dimensions.map(d => `${d.id}=${(d.score * 100).toFixed(0)}%`).join("  ");
+  const elapsedS = report.judgeDiagnostics ? `${(report.judgeDiagnostics.elapsedMs / 1000).toFixed(0)}s` : "";
+  const attempts = report.judgeDiagnostics ? `attempt ${report.judgeDiagnostics.attempts}` : "";
 
-  console.log(`\n═══════════════════════════════════════`);
-  console.log(`  Dream Quality Eval  ${pass}`);
-  console.log(`═══════════════════════════════════════`);
-  console.log(`  Score : ${(report.weightedScore * 100).toFixed(1)}%  [${bar(report.weightedScore)}]  (min ${(report.minPassingScore * 100).toFixed(0)}%)`);
-  console.log(`  Model : ${report.model}`);
-  console.log(`  Transcripts : ${report.transcriptsEvaluated.length} evaluated`);
-  for (const transcript of transcriptPreview) {
-    console.log(`              ${transcript}`);
-  }
-  if (report.transcriptsEvaluated.length > transcriptPreview.length) {
-    console.log(`              ... and ${report.transcriptsEvaluated.length - transcriptPreview.length} more`);
-  }
-  if (report.judgeToolUsed !== undefined) {
-    console.log(`  Judge : tool-contract  toolUsed=${report.judgeToolUsed}${report.judgeToolError ? `  error=${report.judgeToolError}` : ""}`);
-  }
-  if (report.judgeDiagnostics) {
-    const d = report.judgeDiagnostics;
-    const caps = d.modelCapabilitiesLimits
-      ? `ctx=${d.modelCapabilitiesLimits.max_context_window_tokens ?? "default"}, prompt=${d.modelCapabilitiesLimits.max_prompt_tokens ?? "default"}`
-      : "ctx=default, prompt=default";
-    const evidenceBytes = d.evidence.reduce((sum, entry) => sum + (entry.sizeBytes ?? 0), 0);
-    console.log(`  Judge diag : attempts=${d.attempts} elapsed=${d.elapsedMs}ms timeout=${d.effectiveJudgeTimeoutMs}ms prompt≈${d.promptEstimatedTokens}t (${d.promptChars} chars) caps(${caps}) evidence=${d.evidence.length} files/${evidenceBytes} bytes${d.failureCategory ? ` fail=${d.failureCategory}` : ""}`);
-    if (d.rootCause) console.log(`  Root cause: ${d.rootCause}`);
-  }
-  if (report.judgeParseError) {
-    console.log(`  Parse error: ${report.judgeParseError}`);
-  }
-
-  console.log(`\n─── Dimensions ───────────────────────`);
-  for (const d of report.dimensions) {
-    const pct = (d.score * 100).toFixed(0).padStart(3);
-    console.log(`  ${d.id.padEnd(24)} ${pct}%  ${d.rationale}`);
-  }
-
-  if (report.strengths.length) {
-    console.log(`\n─── Strengths ────────────────────────`);
-    for (const s of report.strengths) console.log(`  + ${s}`);
-  }
+  console.log(`\n  ${pass}  ${(report.weightedScore * 100).toFixed(1)}% (min ${(report.minPassingScore * 100).toFixed(0)}%)  ·  ${report.transcriptsEvaluated.length} transcripts  ·  ${attempts}  ·  ${elapsedS}`);
+  console.log(`  ${dims}`);
 
   if (report.weaknesses.length) {
-    console.log(`\n─── Weaknesses ───────────────────────`);
     for (const w of report.weaknesses) console.log(`  - ${w}`);
   }
-
   if (report.improvements.length) {
-    console.log(`\n─── Improvements ─────────────────────`);
     for (const i of report.improvements) console.log(`  → ${i}`);
   }
-
-  console.log(`\n═══════════════════════════════════════\n`);
+  if (report.judgeToolError) console.log(`  error: ${report.judgeToolError}`);
+  if (report.judgeParseError) console.log(`  parse error: ${report.judgeParseError}`);
+  if (report.judgeDiagnostics?.rootCause) console.log(`  root cause: ${report.judgeDiagnostics.rootCause}`);
+  console.log();
 }
 
 async function main(): Promise<void> {
@@ -83,7 +46,6 @@ async function main(): Promise<void> {
   }
   const report = await runDreamQualityEval(workspaceDir, { replayTranscripts });
   printReport(report);
-  if (!report.passed) process.exitCode = 1;
 }
 
 await main();

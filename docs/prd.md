@@ -228,6 +228,7 @@ Focus on extracting:
 - Common complex workflows
 - Generalized rules
 - Reusable global skills
+- Collaboration and interaction preferences
 
 Examples:
 
@@ -235,6 +236,62 @@ Examples:
 - Uses pnpm over npm.
 - Prefers local-first architecture.
 - Likes reviewable diffs.
+
+### Interaction Memories
+
+Dreamer must capture how the user wants agents to communicate, reason, and collaborate, not only what technical facts the agent should remember.
+
+Interaction memories should be concrete, contextual, and example-driven. They should describe:
+
+- Preferred answer length and density.
+- Preferred explanation format.
+- When the user wants pushback.
+- When the user wants clarifying questions.
+- How much assumption-making is acceptable.
+- Review, debugging, and planning expectations.
+- Repeated trust/frustration signals caused by agent behavior.
+
+Good interaction memories:
+
+- User prefers terse, plain language when discussing product behavior.
+- User prefers examples framed as state transitions: given current state, action, expected resulting state.
+- User wants technical pushback on weak plans instead of automatic agreement.
+- User prefers clarifying questions before implementation when requirements are ambiguous, architectural, or high-impact.
+
+Bad interaction memories:
+
+- User likes examples.
+- User likes pushback.
+- Always ask questions before doing anything.
+
+Interaction memories should include `applies_when` whenever possible. Absolute user phrasing such as "always" and "never" should be normalized into context-aware operating rules unless the evidence clearly establishes a hard rule.
+
+Example:
+
+```text
+statement: User prefers examples framed as explicit state transitions when discussing behavior.
+scope: user
+category: preferences
+tags: communication, examples
+applies_when: Explaining requirements, bugs, acceptance criteria, or UI behavior.
+rationale: The user asked for examples such as "Given State A and A.y, click button X, A.y becomes ACCEPTED instead of IN PROGRESS."
+```
+
+Counterexample:
+
+```text
+statement: Always question and interview the user before doing any work.
+```
+
+Preferred normalization:
+
+```text
+statement: Ask clarifying questions before implementation when the task is underspecified, architectural, or high-impact; proceed directly for small obvious fixes while stating assumptions.
+scope: user
+category: workflow
+tags: clarification, implementation
+applies_when: Starting implementation work from an ambiguous request.
+```
 
 ## Workspace Context
 

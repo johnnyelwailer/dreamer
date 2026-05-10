@@ -199,4 +199,124 @@ describe("parseRuntimeManifestObject", () => {
       })
     ).toThrow(/provider\.sdk\.infiniteSessionsEnabled/);
   });
+
+  it("parses optional pipeline.agentPacks", () => {
+    const parsed = parseRuntimeManifestObject({
+      provider: {
+        id: "provider.copilot.sdk",
+        defaultModel: "gpt-5",
+        sdk: {
+          authMode: "none",
+          providerMode: "copilot",
+          requestTimeoutMs: 1000,
+          clientExtraEnvVars: []
+        }
+      },
+      pipeline: {
+        stageOrder: ["stage.orientation", "stage.signal"],
+        agentPacks: {
+          "stage.signal": {
+            defaultAgent: { excludedTools: ["record_insight"] },
+            customAgents: [
+              {
+                name: "timeline-analyst",
+                displayName: "Timeline Analyst",
+                description: "Extracts retries and chronology",
+                tools: ["read_file", "get_message_details"],
+                promptTemplatePath: ".dreamer/config/prompts/stages/signal/timeline.md",
+                infer: true
+              },
+              {
+                name: "insight-recorder",
+                tools: ["record_insight"],
+                promptTemplatePath: ".dreamer/config/prompts/stages/signal/recorder.md",
+                infer: false
+              }
+            ],
+            execution: {
+              mode: "explicit-sequence",
+              explicitSequence: ["timeline-analyst", "insight-recorder"]
+            }
+          }
+        }
+      },
+      docs: {
+        outputRootPath: "docs/generated",
+        fallbackOutputPath: "docs/generated/DREAM_OUTPUT.md",
+        promptTemplatePath: ".dreamer/config/prompts/docs-generation.md",
+        improvementHintsPath: ".dreamer/config/prompts/docs-improvement-hints.md",
+        maxSignals: 25,
+        maxMemories: 25,
+        maxEvents: 25
+      },
+      eval: {
+        casesPath: ".dreamer/config/evals/copilot-sdk-cases.json",
+        reportPath: "reports/evals/copilot-sdk-eval.json",
+        requestTimeoutMs: 120000,
+        maxAttempts: 3,
+        quality: {
+          rubricPath: ".dreamer/config/evals/dream-quality-rubric.json",
+          reportPath: "reports/evals/dream-quality-eval.json",
+          selfImproveReportPath: "reports/evals/dream-self-improve.json",
+          minPassingScore: 0.8,
+          maxHintsToPersist: 8
+        }
+      }
+    });
+
+    const pack = parsed.pipeline.agentPacks?.["stage.signal"];
+    expect(pack?.defaultAgent?.excludedTools).toEqual(["record_insight"]);
+    expect(pack?.customAgents).toHaveLength(2);
+    expect(pack?.customAgents[0]?.name).toBe("timeline-analyst");
+    expect(pack?.execution?.mode).toBe("explicit-sequence");
+    expect(pack?.execution?.explicitSequence).toEqual(["timeline-analyst", "insight-recorder"]);
+  });
+
+  it("rejects invalid pipeline.agentPacks.defaultAgent", () => {
+    expect(() =>
+      parseRuntimeManifestObject({
+        provider: {
+          id: "provider.copilot.sdk",
+          defaultModel: "gpt-5",
+          sdk: {
+            authMode: "none",
+            providerMode: "copilot",
+            requestTimeoutMs: 1000,
+            clientExtraEnvVars: []
+          }
+        },
+        pipeline: {
+          stageOrder: ["stage.orientation"],
+          agentPacks: {
+            "stage.signal": {
+              defaultAgent: "invalid",
+              customAgents: []
+            }
+          }
+        },
+        docs: {
+          outputRootPath: "docs/generated",
+          fallbackOutputPath: "docs/generated/DREAM_OUTPUT.md",
+          promptTemplatePath: ".dreamer/config/prompts/docs-generation.md",
+          improvementHintsPath: ".dreamer/config/prompts/docs-improvement-hints.md",
+          maxSignals: 25,
+          maxMemories: 25,
+          maxEvents: 25
+        },
+        eval: {
+          casesPath: ".dreamer/config/evals/copilot-sdk-cases.json",
+          reportPath: "reports/evals/copilot-sdk-eval.json",
+          requestTimeoutMs: 120000,
+          maxAttempts: 3,
+          quality: {
+            rubricPath: ".dreamer/config/evals/dream-quality-rubric.json",
+            reportPath: "reports/evals/dream-quality-eval.json",
+            selfImproveReportPath: "reports/evals/dream-self-improve.json",
+            minPassingScore: 0.8,
+            maxHintsToPersist: 8
+          }
+        }
+      })
+    ).toThrow(/pipeline\.agentPacks\.stage\.signal\.defaultAgent|pipeline\.agentPacks\.stage\.signal/);
+  });
 });

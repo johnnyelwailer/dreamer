@@ -1,5 +1,6 @@
 import type { RuntimeManifest } from "./runtime-manifest-types.js";
 import { parseByokConfig } from "./runtime-manifest-byok-parse.js";
+import { parseAgentPacks } from "./runtime-manifest-agent-packs-parse.js";
 import { resolveAssetPath } from "./dreamer-home.js";
 function asString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim().length === 0) throw new Error(`Invalid runtime manifest field: ${field}`);
@@ -18,16 +19,6 @@ function asStringOrUndefined(value: unknown, field: string): string | undefined 
 function asBoolean(value: unknown, field: string): boolean {
   if (typeof value !== "boolean") throw new Error(`Invalid runtime manifest field: ${field}`);
   return value;
-}
-function asRecordOfStrings(value: unknown, field: string): Record<string, string> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`Invalid runtime manifest field: ${field}`);
-  const entries = Object.entries(value as Record<string, unknown>);
-  for (const [key, recordValue] of entries) {
-    if (typeof key !== "string" || key.trim().length === 0 || typeof recordValue !== "string") {
-      throw new Error(`Invalid runtime manifest field: ${field}`);
-    }
-  }
-  return Object.fromEntries(entries) as Record<string, string>;
 }
 function asEnum<T extends string>(value: unknown, values: readonly T[], field: string): T {
   if (typeof value !== "string" || !values.includes(value as T)) throw new Error(`Invalid runtime manifest field: ${field}`);
@@ -111,7 +102,10 @@ export function parseRuntimeManifestObject(parsed: unknown): RuntimeManifest {
         byok: parseByokConfig(sdk)
       }
     },
-    pipeline: { stageOrder: asStringArray(pipeline.stageOrder, "pipeline.stageOrder") },
+    pipeline: {
+      stageOrder: asStringArray(pipeline.stageOrder, "pipeline.stageOrder"),
+      agentPacks: parseAgentPacks(pipeline.agentPacks, "pipeline.agentPacks")
+    },
     docs: {
       outputRootPath: asString(docs.outputRootPath, "docs.outputRootPath"),
       fallbackOutputPath: asString(docs.fallbackOutputPath, "docs.fallbackOutputPath"),

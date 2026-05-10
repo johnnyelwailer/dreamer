@@ -38,9 +38,26 @@ export type MemoryBackend = {
   save: (records: MemoryRecord[]) => Promise<void>;
 };
 
+export type RunAgentDefaultAgentConfig = {
+  excludedTools?: string[];
+};
+
+export type RunAgentCustomAgentConfig = {
+  name: string;
+  displayName?: string;
+  description?: string;
+  tools?: string[] | null;
+  prompt: string;
+  infer?: boolean;
+};
+
 export type RunAgentOptions = {
   workingDirectory?: string;
   retries?: string[];
+  customAgents?: RunAgentCustomAgentConfig[];
+  defaultAgent?: RunAgentDefaultAgentConfig;
+  selectedAgent?: string;
+  onSubagentEvent?: (event: unknown) => void;
 };
 
 export type IntelligenceProvider = {

@@ -4,7 +4,20 @@ import { Honcho, type HonchoConfig } from "@honcho-ai/sdk";
 import { workspaceStorageDir } from "../dream/dreamer-home.js";
 import type { MemoryBackend } from "../core/contracts.js";
 import type { MemoryRecord } from "../core/types.js";
-import { buildSnapshot, defaultWorkspaceId, DREAMER_METADATA_KEY, DREAMER_PEER_ID, type HonchoClientLike, type HonchoExport, type HonchoMemoryBackendOptions, type HonchoPeerLike, type HonchoSnapshot, listAllConclusions, type MemoryScope, isMemoryScope, parseLegacyExport, parseSnapshot, SCOPE_PEERS, toConclusionContent } from "./honcho-memory-shared.js";
+import { buildSnapshot, defaultWorkspaceId, DREAMER_METADATA_KEY, DREAMER_PEER_ID, type HonchoClientLike, type HonchoConclusionScopeLike, type HonchoExport, type HonchoMemoryBackendOptions, type HonchoPeerLike, type HonchoSnapshot, type MemoryScope, isMemoryScope, parseLegacyExport, parseSnapshot, SCOPE_PEERS, toConclusionContent } from "./honcho-memory-shared.js";
+
+async function listAllConclusions(scope: HonchoConclusionScopeLike) {
+  const collected = [];
+  let page = await scope.list({ page: 1, size: 100, reverse: true });
+  while (true) {
+    collected.push(...page.items);
+    if (typeof page.getNextPage !== "function") break;
+    const nextPage = await page.getNextPage();
+    if (!nextPage) break;
+    page = nextPage;
+  }
+  return collected;
+}
 
 export class HonchoMemoryBackend implements MemoryBackend {
   readonly id = "backend.honcho.memory";

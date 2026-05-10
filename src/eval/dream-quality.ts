@@ -8,6 +8,7 @@ import {
 } from "../dream/runtime-manifest.js";
 import { runDream } from "../dream/run-dream.js";
 import { createAdapter } from "../dream/adapter-factory.js";
+import { discoverCopilotDebugSessions } from "../dream/copilot-debug-session-discovery.js";
 import {
   buildRubricText,
   scoreReport
@@ -20,6 +21,34 @@ import { deriveJudgeErrorDiagnostics } from "./judge-error-diagnostics.js";
 import { workspaceStorageDir } from "../dream/dreamer-home.js";
 import { createTtyStatus } from "../shared/tty-progress.js";
 
+/**
+ * Pick a stratified sample: 1 long, 1 medium, 2 short — totalling ~4 sessions.
+ * Falls back gracefully when fewer sessions exist.
+ */
+function sampleSessionPaths(config: ReturnType<typeof readDreamConfig>): string[] | undefined {
+  if (config.adapterId !== "adapter.copilot.debug") return undefined;
+  const sessions = discoverCopilotDebugSessions({
+    searchPaths: config.copilotDebugSearchPaths,
+    mode: config.copilotDebugDiscoveryMode,
+    lookbackDays: config.copilotDebugLookbackDays
+  });
+  if (sessions.length <= 4) return undefined; // already small enough, no sampling needed
+  const sorted = [...sessions].sort((a, b) => a.transcriptLineCount - b.transcriptLineCount);
+  const n = sorted.length;
+  const sample: typeof sorted = [];
+  // 2 shortest
+  sample.push(sorted[0]);
+  if (n > 1) sample.push(sorted[1]);
+  // 1 median
+  const mid = Math.floor(n / 2);
+  const median = sorted[mid];
+  if (!sample.includes(median)) sample.push(median);
+  // 1 longest
+  const longest = sorted[n - 1];
+  if (!sample.includes(longest)) sample.push(longest);
+  return sample.map((s) => s.path);
+}
+
 type RunQualityEvalOptions = { replayTranscripts?: boolean };
 export async function runDreamQualityEval(
   workspaceDir: string,
@@ -27,24 +56,40 @@ export async function runDreamQualityEval(
 ): Promise<DreamQualityReport> {
   const status = createTtyStatus("[eval:dream-quality]");
   status.update(`start workspace=${workspaceDir}`);
+  const config = readDreamConfig(workspaceDir);
+  const sessionPathAllowlist = sampleSessionPaths(config);
+  if (sessionPathAllowlist) {
+    status.update(`sampled ${sessionPathAllowlist.length} transcripts for eval (1 long, 1 medium, 2 short)`);
+  }
   status.update(`running dream cycle replay=${String(options.replayTranscripts === true)}`);
   await runDream(workspaceDir, {
     replayFromStart: options.replayTranscripts === true,
-    persistState: options.replayTranscripts === true ? false : undefined
+    persistState: options.replayTranscripts === true ? false : undefined,
+    sessionPathAllowlist
   });
   status.update("loading runtime manifest and rubric");
   const runtime = readRuntimeManifest(workspaceDir);
-  const config = readDreamConfig(workspaceDir);
   const rubric: DreamQualityRubricConfig = readDreamQualityRubric(workspaceDir, runtime);
 
   const promptTemplatePath = rubric.judgePromptTemplatePath;
   const promptTemplate = await readFile(promptTemplatePath, "utf8");
   const adapter = createAdapter(config);
-  const evidenceFiles = [
+  const allEvidenceFiles = [
     ...resolveJudgeEvidenceFiles(adapter),
     ...resolveMemoryOutputFiles(workspaceDir),
     ...resolveStagePromptFiles()
   ];
+  // Filter transcript evidence to match the sampled sessions (session dir basename = sessionId)
+  const allowedSessionIds = sessionPathAllowlist
+    ? new Set(sessionPathAllowlist.map((p) => p.split("/").pop() ?? ""))
+    : undefined;
+  const evidenceFiles = allowedSessionIds
+    ? allEvidenceFiles.filter((f) => {
+        if (f.kind !== "transcript") return true;
+        const fileBase = f.path.split("/").pop()?.replace(/\.jsonl$/, "") ?? "";
+        return allowedSessionIds.has(fileBase);
+      })
+    : allEvidenceFiles;
   status.update(`evidence files=${evidenceFiles.length}`);
   const prompt = [
     promptTemplate.replaceAll("{{rubric}}", buildRubricText(rubric)),

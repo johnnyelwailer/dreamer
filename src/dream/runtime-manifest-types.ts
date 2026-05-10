@@ -38,6 +38,31 @@ type RuntimeProviderConfig = {
 
 type RuntimePipelineConfig = {
   stageOrder: string[];
+  agentPacks?: Record<string, RuntimeStageAgentPackConfig>;
+};
+
+export type RuntimeDefaultAgentConfig = {
+  excludedTools: string[];
+};
+
+export type RuntimeCustomAgentConfig = {
+  name: string;
+  displayName?: string;
+  description?: string;
+  tools?: string[] | null;
+  promptTemplatePath: string;
+  infer?: boolean;
+};
+
+export type RuntimeAgentPackExecutionConfig = {
+  mode: "inferred" | "explicit-sequence";
+  explicitSequence?: string[];
+};
+
+export type RuntimeStageAgentPackConfig = {
+  defaultAgent?: RuntimeDefaultAgentConfig;
+  customAgents: RuntimeCustomAgentConfig[];
+  execution?: RuntimeAgentPackExecutionConfig;
 };
 
 type RuntimeDocsConfig = {

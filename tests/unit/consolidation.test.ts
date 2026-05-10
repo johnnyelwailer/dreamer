@@ -18,15 +18,29 @@ describe("ConsolidationStage", () => {
         const writeTool = typedTools.find((t) => t.name === "write_memory");
         const listTool = typedTools.find((t) => t.name === "list_memories");
         listTool?.handler({});
-        writeTool?.handler({ statement: "Use fast failing tests before refactors", scope: "workspace", confidence: 0.9 });
-        writeTool?.handler({ statement: "Use fast failing tests before refactors", scope: "workspace", confidence: 0.9 });
+        writeTool?.handler({
+          statement: "Use fast failing tests before refactors",
+          scope: "workspace",
+          confidence: 0.9,
+          horizon: "long_term",
+          reason: "Repeated user correction showed this is a durable engineering practice.",
+          references: [{ kind: "session", value: "session-1" }]
+        });
+        writeTool?.handler({
+          statement: "Use fast failing tests before refactors",
+          scope: "workspace",
+          confidence: 0.9,
+          horizon: "long_term",
+          reason: "Repeated user correction showed this is a durable engineering practice.",
+          references: [{ kind: "session", value: "session-1" }]
+        });
         writeCount++;
         return "";
       }
     };
     const stage = new ConsolidationStage(provider);
     const context = buildContext(process.cwd(), "run-x");
-    context.insights = ["Use fast failing tests before refactors"];
+    context.insights = [{ statement: "Use fast failing tests before refactors", scope: "workspace" }];
     const result = await stage.run(context);
     expect(writeCount).toBe(1);
     expect(result.memories.length).toBe(1);

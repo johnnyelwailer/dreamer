@@ -5,6 +5,7 @@ import type { JudgeEvidenceFile } from "./dream-quality-evidence.js";
 import { extractAssistantText, type ToolJudgePayload } from "./dream-quality-tool-judge-helpers.js";
 import { createEvidenceTools } from "./dream-quality-evidence-tools.js";
 import { createTtyStatus } from "../shared/tty-progress.js";
+import { createDreamAgentStreamHandler } from "../providers/copilot-sdk-stream.js";
 
 type CopilotSession = {
   sendAndWait: (request: { prompt: string }, timeoutMs?: number) => Promise<unknown>;
@@ -44,6 +45,7 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
   let streamDeltaCount = 0;
   let firstStreamDeltaMs: number | undefined;
   const liveStream = isEnabled(process.env.DREAM_EVAL_LIVE_STREAM);
+  const streamHandler = createDreamAgentStreamHandler();
 
   const tools = createEvidenceTools(input.evidenceFiles, input.rubricDimensionIds, (payload) => {
     captured = payload;
@@ -68,34 +70,34 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
       workingDirectory: homedir(),
       onPermissionRequest: approveAll,
       onEvent: (event) => {
+        streamHandler?.(event);
         streamEventCount += 1;
         if (event.type === "assistant.message_delta" || event.type === "assistant.streaming_delta") {
           streamDeltaCount += 1;
           if (firstStreamDeltaMs === undefined) firstStreamDeltaMs = Date.now() - startedAt;
         }
-        if (liveStream && event.type === "assistant.message_delta") {
-          const text = typeof event.data?.deltaContent === "string" ? event.data.deltaContent : "";
-          if (text) process.stdout.write(text);
-        }
-        if (liveStream && event.type === "assistant.message") process.stdout.write("\n");
       },
       tools
     })) as CopilotSession;
 
-    const prompts = [
-      `${input.prompt}\n\nCall submit_quality_scores now with your complete evaluation results.`,
-      "You must call submit_quality_scores. Call it now with all rubric scores, strengths, weaknesses, and improvements.",
-      "Final attempt: call submit_quality_scores immediately with complete results."
-    ];
+    const firstPrompt = `${input.prompt}\n\nCall submit_quality_scores now with your complete evaluation results.`;
+    let prompt = firstPrompt;
+    const maxAttempts = Number(process.env.DREAM_EVAL_JUDGE_MAX_ATTEMPTS ?? "8");
 
-    for (const prompt of prompts) {
+    while (!captured && attempts < Math.max(1, maxAttempts)) {
       attempts += 1;
-      const attemptLabel = `judge attempt ${attempts}/${prompts.length}`;
+      const attemptLabel = `judge attempt ${attempts}/${Math.max(1, maxAttempts)}`;
       const response = liveStream
         ? (status.update(attemptLabel), await session.sendAndWait({ prompt }, judgeTimeoutMs))
         : await status.track(attemptLabel, session.sendAndWait({ prompt }, judgeTimeoutMs));
       lastRawOutput = extractAssistantText(response);
+
       if (captured) break;
+      prompt =
+        "Your previous message finished without a successful submit_quality_scores tool call. " +
+        "Do not provide more analysis text. Call submit_quality_scores now with this exact structure: " +
+        '{"scores":[{"id":"<dimension_id>","score":0.0-1.0,"rationale":"..."}],"strengths":["..."],"weaknesses":["..."],"improvements":["..."]}. ' +
+        `Include all rubric dimension ids exactly once: ${input.rubricDimensionIds.join(", ")}.`;
     }
     status.done(`judge complete usedTool=${String(Boolean(captured))}`);
 

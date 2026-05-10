@@ -7,10 +7,10 @@ import {
   type ModelCapabilitiesOverride,
   type ProviderConfig
 } from "@github/copilot-sdk";
+import { createDreamAgentStreamHandler } from "./copilot-sdk-stream.js";
 
 export const COPILOT_SDK_PROVIDER_NO_SUMMARY = "No summary returned.";
 export const COPILOT_SDK_PROVIDER_REQUEST_FAILED = "Copilot SDK provider request failed.";
-
 type CopilotSession = {
   sendAndWait: (request: { prompt: string }, timeoutMs?: number) => Promise<unknown>;
 };
@@ -38,7 +38,6 @@ function normalizeText(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value.map((item) => normalizeText(item)).join("\n");
   if (!value || typeof value !== "object") return "";
-
   const record = value as Record<string, unknown>;
   if (typeof record.content === "string") return record.content;
   if (typeof record.text === "string") return record.text;
@@ -64,7 +63,6 @@ export class CopilotSdkProvider implements IntelligenceProvider {
   private async createSession(): Promise<CopilotSession> {
     const client = new CopilotClient(this.options.clientOptions);
     await client.start();
-
     const session = (await client.createSession({
       model: this.options.model,
       provider: this.options.sessionConfig.provider,
@@ -77,16 +75,13 @@ export class CopilotSdkProvider implements IntelligenceProvider {
       workingDirectory: this.options.sessionConfig.workingDirectory,
       onPermissionRequest: approveAll
     })) as CopilotSession;
-
     this.client = client;
     return session;
   }
 
   private async getSession(): Promise<CopilotSession> {
     if (this.session) return this.session;
-    if (!this.sessionPromise) {
-      this.sessionPromise = this.createSession();
-    }
+    if (!this.sessionPromise) this.sessionPromise = this.createSession();
     this.session = await this.sessionPromise;
     this.sessionPromise = null;
     return this.session;
@@ -114,6 +109,7 @@ export class CopilotSdkProvider implements IntelligenceProvider {
 
   async runAgent(prompt: string, tools: unknown[], options: import("../core/contracts.js").RunAgentOptions = {}): Promise<string> {
     const client = new CopilotClient(this.options.clientOptions);
+    const onStreamEvent = createDreamAgentStreamHandler();
     let lastOutput = "";
     try {
       await client.start();
@@ -127,7 +123,14 @@ export class CopilotSdkProvider implements IntelligenceProvider {
         includeSubAgentStreamingEvents: this.options.sessionConfig.includeSubAgentStreamingEvents,
         configDir: this.options.sessionConfig.configDir,
         workingDirectory: options.workingDirectory ?? this.options.sessionConfig.workingDirectory,
+        customAgents: options.customAgents as Parameters<typeof client.createSession>[0]["customAgents"],
+        defaultAgent: options.defaultAgent as Parameters<typeof client.createSession>[0]["defaultAgent"],
+        agent: options.selectedAgent,
         onPermissionRequest: approveAll,
+        onEvent: (event) => {
+          onStreamEvent?.(event);
+          options.onSubagentEvent?.(event);
+        },
         tools: tools as Parameters<typeof client.createSession>[0]["tools"]
       })) as CopilotSession;
 

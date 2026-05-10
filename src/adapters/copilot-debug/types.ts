@@ -6,6 +6,8 @@ export type CopilotDebugAdapterOptions = {
   discoveryMode?: "append" | "override";
   lookbackDays?: number;
   maxSessionsPerRun?: number;
+  /** When set, only sessions whose path is in this list are used. */
+  sessionPathAllowlist?: string[];
 };
 
 export type CopilotSessionCheckpoint = {
