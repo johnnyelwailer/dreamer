@@ -20,6 +20,10 @@ export class ClaudeCodeAdapter implements TranscriptAdapter {
 
   constructor(private readonly filePath: string) {}
 
+  evidenceFiles() {
+    return [{ path: this.filePath, kind: "transcript" as const }];
+  }
+
   async ingest(checkpoint?: unknown): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
     const since = typeof checkpoint === "string" ? checkpoint : undefined;
     const lines = await readJsonLines(this.filePath).catch(() => []);

@@ -4,22 +4,27 @@
     {
       "id": "signal_extraction",
       "description": "Important signals from the transcript (corrections, decisions, failures, preferences) were correctly identified and extracted into memories.",
-      "weight": 0.35
+      "weight": 0.30
     },
     {
       "id": "memory_quality",
       "description": "Extracted memories are precise, durable, and free from noise or filler. No hallucinated or contradictory entries.",
-      "weight": 0.3
+      "weight": 0.25
     },
     {
       "id": "coverage",
       "description": "All significant themes and events from the transcript are reflected in the dream outputs. No major omissions.",
-      "weight": 0.2
+      "weight": 0.20
     },
     {
       "id": "coherence",
       "description": "Memories are internally consistent and non-contradictory. No duplicates or conflicting statements.",
       "weight": 0.15
+    },
+    {
+      "id": "prompt_quality",
+      "description": "The signal and consolidation prompts are focused, efficient, and well-scoped. They would reliably guide an AI to extract meaningful insights rather than noise.",
+      "weight": 0.10
     }
   ]
 }

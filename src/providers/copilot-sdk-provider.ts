@@ -1,5 +1,12 @@
 import type { IntelligenceProvider } from "../core/contracts.js";
-import { CopilotClient, approveAll, type CopilotClientOptions, type InfiniteSessionConfig, type ProviderConfig } from "@github/copilot-sdk";
+import {
+  CopilotClient,
+  approveAll,
+  type CopilotClientOptions,
+  type InfiniteSessionConfig,
+  type ModelCapabilitiesOverride,
+  type ProviderConfig
+} from "@github/copilot-sdk";
 
 export const COPILOT_SDK_PROVIDER_NO_SUMMARY = "No summary returned.";
 export const COPILOT_SDK_PROVIDER_REQUEST_FAILED = "Copilot SDK provider request failed.";
@@ -11,11 +18,17 @@ type CopilotSession = {
 export type CopilotSdkProviderOptions = {
   model: string;
   requestTimeoutMs: number;
-  clientOptions: Pick<CopilotClientOptions, "useLoggedInUser" | "gitHubToken" | "cliPath" | "cliUrl" | "env">;
+  clientOptions: Pick<
+    CopilotClientOptions,
+    "useLoggedInUser" | "gitHubToken" | "cliPath" | "cliUrl" | "env" | "onListModels"
+  >;
   sessionConfig: {
     provider?: ProviderConfig;
     gitHubToken?: string;
     infiniteSessions?: InfiniteSessionConfig;
+    modelCapabilities?: ModelCapabilitiesOverride;
+    streaming?: boolean;
+    includeSubAgentStreamingEvents?: boolean;
     configDir?: string;
     workingDirectory?: string;
   };
@@ -57,6 +70,9 @@ export class CopilotSdkProvider implements IntelligenceProvider {
       provider: this.options.sessionConfig.provider,
       gitHubToken: this.options.sessionConfig.gitHubToken,
       infiniteSessions: this.options.sessionConfig.infiniteSessions,
+      modelCapabilities: this.options.sessionConfig.modelCapabilities,
+      streaming: this.options.sessionConfig.streaming,
+      includeSubAgentStreamingEvents: this.options.sessionConfig.includeSubAgentStreamingEvents,
       configDir: this.options.sessionConfig.configDir,
       workingDirectory: this.options.sessionConfig.workingDirectory,
       onPermissionRequest: approveAll
@@ -93,6 +109,38 @@ export class CopilotSdkProvider implements IntelligenceProvider {
     } catch {
       await this.dispose();
       return COPILOT_SDK_PROVIDER_REQUEST_FAILED;
+    }
+  }
+
+  async runAgent(prompt: string, tools: unknown[], options: import("../core/contracts.js").RunAgentOptions = {}): Promise<string> {
+    const client = new CopilotClient(this.options.clientOptions);
+    let lastOutput = "";
+    try {
+      await client.start();
+      const session = (await client.createSession({
+        model: this.options.model,
+        provider: this.options.sessionConfig.provider,
+        gitHubToken: this.options.sessionConfig.gitHubToken,
+        infiniteSessions: this.options.sessionConfig.infiniteSessions,
+        modelCapabilities: this.options.sessionConfig.modelCapabilities,
+        streaming: this.options.sessionConfig.streaming,
+        includeSubAgentStreamingEvents: this.options.sessionConfig.includeSubAgentStreamingEvents,
+        configDir: this.options.sessionConfig.configDir,
+        workingDirectory: options.workingDirectory ?? this.options.sessionConfig.workingDirectory,
+        onPermissionRequest: approveAll,
+        tools: tools as Parameters<typeof client.createSession>[0]["tools"]
+      })) as CopilotSession;
+
+      const prompts = [prompt, ...(options.retries ?? [])];
+      for (const p of prompts) {
+        const response = await session.sendAndWait({ prompt: p }, this.options.requestTimeoutMs);
+        lastOutput = extractAssistantText(response);
+      }
+      return lastOutput;
+    } catch (error) {
+      return `${COPILOT_SDK_PROVIDER_REQUEST_FAILED}: ${String(error)}`;
+    } finally {
+      await client.stop().catch(() => undefined);
     }
   }
 }

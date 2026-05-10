@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 type EvalDimension = { id: string; score: number; rationale?: string };
 type EvalReport = {
@@ -23,13 +24,13 @@ export async function runInspectInsights(workspaceDir: string, json: boolean): P
   let pipelineLog: PipelineLog | null = null;
 
   try {
-    evalReport = JSON.parse(await readFile(join(workspaceDir, "reports", "evals", "dream-quality-eval.json"), "utf8")) as EvalReport;
+    evalReport = JSON.parse(await readFile(join(workspaceStorageDir(workspaceDir), "reports", "evals", "dream-quality-eval.json"), "utf8")) as EvalReport;
   } catch {
     evalReport = null;
   }
 
   try {
-    pipelineLog = JSON.parse(await readFile(join(workspaceDir, "reports", "pipeline-log.json"), "utf8")) as PipelineLog;
+    pipelineLog = JSON.parse(await readFile(join(workspaceStorageDir(workspaceDir), "reports", "pipeline-log.json"), "utf8")) as PipelineLog;
   } catch {
     pipelineLog = null;
   }

@@ -1,19 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { buildCopilotSdkProviderOptions } from "../../src/dream/copilot-sdk-options.js";
 import { parseRuntimeManifestObject } from "../../src/dream/runtime-manifest-parse.js";
 import type { RuntimeManifest } from "../../src/dream/runtime-manifest.js";
 
-function createRuntimeManifest(infiniteSessionsEnabled?: boolean): RuntimeManifest {
+function createRuntimeManifest(
+  infiniteSessionsEnabled?: boolean,
+  providerMode: "copilot" | "byok" = "copilot"
+): RuntimeManifest {
   return {
     provider: {
       id: "provider.copilot.sdk",
       defaultModel: "gpt-5",
       sdk: {
         authMode: "none",
-        providerMode: "copilot",
+        providerMode,
         requestTimeoutMs: 1000,
         ...(infiniteSessionsEnabled !== undefined ? { infiniteSessionsEnabled } : {}),
-        clientExtraEnvVars: []
+        clientExtraEnvVars: [],
+        ...(providerMode === "byok"
+          ? {
+              byok: {
+                type: "openai",
+                wireApi: "completions",
+                baseUrl: "http://localhost:11434/v1"
+              }
+            }
+          : {})
       }
     },
     pipeline: { stageOrder: ["stage.orientation"] },
@@ -43,14 +55,65 @@ function createRuntimeManifest(infiniteSessionsEnabled?: boolean): RuntimeManife
 }
 
 describe("buildCopilotSdkProviderOptions", () => {
-  it("disables infinite sessions by default", () => {
+  afterEach(() => {
+    delete process.env.COPILOT_SDK_MAX_CONTEXT_WINDOW_TOKENS;
+    delete process.env.COPILOT_SDK_MAX_PROMPT_TOKENS;
+    delete process.env.COPILOT_SDK_STREAMING;
+    delete process.env.COPILOT_SDK_INCLUDE_SUBAGENT_STREAMING_EVENTS;
+  });
+
+  it("enables infinite sessions by default", () => {
     const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
-    expect(options.sessionConfig.infiniteSessions).toEqual({ enabled: false });
+    expect(options.sessionConfig.infiniteSessions).toEqual({ enabled: true });
   });
 
   it("honors runtime infiniteSessionsEnabled when true", () => {
     const options = buildCopilotSdkProviderOptions(createRuntimeManifest(true), "gpt-5", process.cwd());
     expect(options.sessionConfig.infiniteSessions).toEqual({ enabled: true });
+  });
+
+  it("applies env overrides for model context limits", () => {
+    process.env.COPILOT_SDK_MAX_CONTEXT_WINDOW_TOKENS = "64000";
+    process.env.COPILOT_SDK_MAX_PROMPT_TOKENS = "16000";
+
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
+    expect(options.sessionConfig.modelCapabilities?.limits?.max_context_window_tokens).toBe(64000);
+    expect(options.sessionConfig.modelCapabilities?.limits?.max_prompt_tokens).toBe(16000);
+  });
+
+  it("adds BYOK custom model listing with configured limits", () => {
+    process.env.COPILOT_SDK_MAX_CONTEXT_WINDOW_TOKENS = "64000";
+    process.env.COPILOT_SDK_MAX_PROMPT_TOKENS = "16000";
+
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(undefined, "byok"), "gpt-5", process.cwd());
+    const models = options.clientOptions.onListModels?.();
+
+    expect(models).toBeDefined();
+    expect(models).toHaveLength(1);
+    expect(models?.[0].id).toBe("gpt-5");
+    expect(models?.[0].capabilities?.limits?.max_context_window_tokens).toBe(64000);
+    expect(models?.[0].capabilities?.limits?.max_prompt_tokens).toBe(16000);
+  });
+
+  it("does not add custom model listing outside BYOK", () => {
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(undefined, "copilot"), "gpt-5", process.cwd());
+    expect(options.clientOptions.onListModels).toBeUndefined();
+  });
+
+  it("ignores invalid context limit env values", () => {
+    process.env.COPILOT_SDK_MAX_CONTEXT_WINDOW_TOKENS = "0";
+    process.env.COPILOT_SDK_MAX_PROMPT_TOKENS = "not-a-number";
+
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
+    expect(options.sessionConfig.modelCapabilities).toBeUndefined();
+  });
+
+  it("applies streaming env toggles", () => {
+    process.env.COPILOT_SDK_STREAMING = "true";
+    process.env.COPILOT_SDK_INCLUDE_SUBAGENT_STREAMING_EVENTS = "0";
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
+    expect(options.sessionConfig.streaming).toBe(true);
+    expect(options.sessionConfig.includeSubAgentStreamingEvents).toBe(false);
   });
 });
 

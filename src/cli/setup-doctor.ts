@@ -1,5 +1,6 @@
 import { join, relative } from "node:path";
 import { readDreamConfig } from "../dream/config.js";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 import { readRuntimeManifest, runtimeManifestPath } from "../dream/runtime-manifest.js";
 import { buildEnvSnapshot, collectProviderEnvVarNames, envValue, envValueSource } from "./env.js";
 import { type HealthCheck, pathExists, printChecks } from "./shared.js";
@@ -67,8 +68,8 @@ export async function runSetupDoctor(workspaceDir: string, strict: boolean): Pro
       });
     }
 
-    const reportsDir = join(workspaceDir, "reports");
-    checks.push({ status: (await pathExists(reportsDir)) ? "ok" : "warn", label: "reports directory", detail: relative(workspaceDir, reportsDir) });
+    const reportsDir = join(workspaceStorageDir(workspaceDir), "reports");
+    checks.push({ status: (await pathExists(reportsDir)) ? "ok" : "warn", label: "reports directory", detail: reportsDir });
   } catch (error) {
     checks.push({ status: "fail", label: "config parse", detail: error instanceof Error ? error.message : String(error) });
   }

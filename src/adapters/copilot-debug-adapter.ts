@@ -17,27 +17,34 @@ import type { CopilotDebugAdapterOptions, CopilotDebugCheckpoint } from "./copil
 export class CopilotDebugAdapter implements TranscriptAdapter {
   readonly id = "adapter.copilot.debug";
   readonly supportsIncremental = true;
-
   constructor(private readonly options: string | CopilotDebugAdapterOptions) {}
+
+  evidenceFiles(): Array<{ path: string; kind: "transcript" | "event-log" }> {
+    return this.discoverSessions().flatMap((s) =>
+      s.transcriptPath ? [{ path: s.transcriptPath, kind: "transcript" as const }] : []
+    );
+  }
 
   async ingest(checkpoint?: unknown): Promise<{ events: NormalizedEvent[]; cursor?: string; checkpoint?: unknown; progress?: AdapterProgress }> {
     const parsed = parseCheckpoint(checkpoint);
     const discovered = this.discoverSessions();
     if (discovered.length === 0) {
+      console.log("[dream] ingest: no Copilot debug sessions discovered");
       return { events: [], checkpoint: parsed, progress: emptyProgress() };
     }
-
     const prioritized = prioritizeSessions(discovered, parsed.sessions);
     const maxSessions = this.readMaxSessionsPerRun();
     const selected = maxSessions ? prioritized.slice(0, maxSessions) : prioritized;
+    console.log(`[dream] ingest: ${selected.length}/${discovered.length} sessions selected`);
     const nowIso = new Date().toISOString();
     const nextSessions = { ...parsed.sessions };
     const runEvents: NormalizedEvent[] = [];
     let latestCursor: string | undefined;
     let durationMs = 0;
 
-    for (const session of selected) {
+    for (const [index, session] of selected.entries()) {
       const startedAt = Date.now();
+      console.log(`[dream] ingest: session ${index + 1}/${selected.length} ${session.sessionId}`);
       const fallbackState = parsed.legacyCursor ? { cursor: parsed.legacyCursor } : {};
       const state = parsed.sessions[session.path] ?? fallbackState;
       const ingestResult = await ingestCopilotSession(session, state);
@@ -51,6 +58,7 @@ export class CopilotDebugAdapter implements TranscriptAdapter {
         totalEventsSeen: (state.totalEventsSeen ?? 0) + ingestResult.events.length
       };
       durationMs += Math.max(1, Date.now() - startedAt);
+      console.log(`[dream] ingest: done ${session.sessionId} events=${ingestResult.events.length}`);
     }
 
     const averageSessionDurationMs = computeAverageMs(parsed, selected.length, durationMs);
@@ -60,14 +68,17 @@ export class CopilotDebugAdapter implements TranscriptAdapter {
       averageSessionDurationMs,
       totalRuns: (parsed.totalRuns ?? 0) + 1
     };
-
     const completion = computeCompletion(discovered, nextSessions);
+    const progress = buildProgress(completion, selected.length, discovered.length, averageSessionDurationMs);
     runEvents.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    console.log(
+      `[dream] ingest: progress ${progress.completedUnits}/${progress.totalUnits} (${progress.completionPercent}%)${progress.etaMinutes !== undefined ? ` eta=${progress.etaMinutes}m` : ""}`
+    );
     return {
       events: runEvents,
       cursor: latestCursor,
       checkpoint: nextCheckpoint,
-      progress: buildProgress(completion, selected.length, discovered.length, averageSessionDurationMs)
+      progress
     };
   }
 
@@ -134,14 +145,5 @@ function buildProgress(
 }
 
 function emptyProgress(): AdapterProgress {
-  return {
-    label: "copilot-backlog",
-    totalUnits: 0,
-    completedUnits: 0,
-    remainingUnits: 0,
-    completionPercent: 100,
-    processedThisRun: 0,
-    etaMinutes: 0,
-    details: "No Copilot sessions discovered."
-  };
+  return { label: "copilot-backlog", totalUnits: 0, completedUnits: 0, remainingUnits: 0, completionPercent: 100, processedThisRun: 0, etaMinutes: 0, details: "No Copilot sessions discovered." };
 }

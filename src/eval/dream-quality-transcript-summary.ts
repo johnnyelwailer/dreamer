@@ -14,6 +14,7 @@ export type TranscriptSummary = {
   noisyMessageCount?: number;
   sampleUserMessages?: string[];
   sampleAssistantMessages?: string[];
+  conversationReplay?: Array<{ role: "user" | "assistant"; content: string }>;
 };
 
 export async function summarizeCopilotTranscript(sessionDir: string): Promise<TranscriptSummary | undefined> {
@@ -31,6 +32,7 @@ export async function summarizeCopilotTranscript(sessionDir: string): Promise<Tr
     let noisyMessageCount = 0;
     const sampleUserMessages: string[] = [];
     const sampleAssistantMessages: string[] = [];
+    const conversationReplay: Array<{ role: "user" | "assistant"; content: string }> = [];
 
     for (const line of raw.split("\n")) {
       if (!line.trim()) continue;
@@ -54,9 +56,11 @@ export async function summarizeCopilotTranscript(sessionDir: string): Promise<Tr
           if (parsed.type === "user.message") {
             userMessageCount += 1;
             if (text && sampleUserMessages.length < 3) sampleUserMessages.push(text.slice(0, 180));
+            if (content && !isNoisy) conversationReplay.push({ role: "user", content });
           } else {
             assistantMessageCount += 1;
             if (text && sampleAssistantMessages.length < 3) sampleAssistantMessages.push(text.slice(0, 180));
+            if (content && !isNoisy) conversationReplay.push({ role: "assistant", content });
           }
         }
         if (parsed.type?.startsWith("tool.")) toolCount += 1;
@@ -77,7 +81,8 @@ export async function summarizeCopilotTranscript(sessionDir: string): Promise<Tr
       substantiveMessageCount,
       noisyMessageCount,
       sampleUserMessages,
-      sampleAssistantMessages
+      sampleAssistantMessages,
+      conversationReplay
     };
   } catch {
     return { path: transcriptPath, exists: false, sessionId };

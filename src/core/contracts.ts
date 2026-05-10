@@ -20,10 +20,16 @@ export type AdapterIngestResult = {
   progress?: AdapterProgress;
 };
 
+export type AdapterEvidenceFile = {
+  path: string;
+  kind: "transcript" | "event-log";
+};
+
 export type TranscriptAdapter = {
   id: PluginId;
   supportsIncremental: boolean;
   ingest: (checkpoint?: unknown) => Promise<AdapterIngestResult>;
+  evidenceFiles: () => AdapterEvidenceFile[];
 };
 
 export type MemoryBackend = {
@@ -32,9 +38,15 @@ export type MemoryBackend = {
   save: (records: MemoryRecord[]) => Promise<void>;
 };
 
+export type RunAgentOptions = {
+  workingDirectory?: string;
+  retries?: string[];
+};
+
 export type IntelligenceProvider = {
   id: PluginId;
   summarize: (input: string) => Promise<string>;
+  runAgent: (prompt: string, tools: unknown[], options?: RunAgentOptions) => Promise<string>;
 };
 
 export type PipelineStage = {

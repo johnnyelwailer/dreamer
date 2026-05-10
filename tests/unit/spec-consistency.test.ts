@@ -36,6 +36,18 @@ describe("spec consistency", () => {
       }
     }
 
+    if (violations.length > 0) {
+      throw new Error(
+        [
+          `Source file limit exceeded (${MAX_SOURCE_LINES} lines).`,
+          "DO NOT compress code to stay under the limit.",
+          "Split files immediately by responsibility.",
+          "Violations:",
+          ...violations.map((v) => `- ${v}`)
+        ].join("\n")
+      );
+    }
+
     expect(violations).toEqual([]);
   });
 });

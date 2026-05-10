@@ -18,7 +18,7 @@ export async function ingestCopilotSession(
   const mainPath = join(session.path, "main.jsonl");
   const modelPath = join(session.path, "models.json");
   const lines = await safeReadLines(mainPath);
-  const sessionEvent = mapSessionStart(lines[0] ?? "{}", session.sessionId);
+  const sessionEvent = mapSessionStart(lines[0] ?? "{}", session.sessionId, session.transcriptPath);
   const modelEvent = await mapModels(modelPath, sessionEvent.timestamp, session.sessionId);
   const transcriptEvents = await readCopilotTranscriptEvents(session.path, sessionEvent);
   const scopedTranscriptEvents = transcriptEvents.map((event) => ({ ...event, id: `${session.sessionId}:${event.id}` }));
@@ -50,7 +50,7 @@ async function safeReadLines(filePath: string): Promise<string[]> {
   }
 }
 
-function mapSessionStart(line: string, fallbackSid: string): NormalizedEvent {
+function mapSessionStart(line: string, fallbackSid: string, transcriptPath?: string): NormalizedEvent {
   const parsed = safeParse<SessionStart>(line) ?? {};
   const sid = parsed.sid ?? fallbackSid;
   const ts = parsed.ts ? new Date(parsed.ts).toISOString() : new Date().toISOString();
@@ -63,7 +63,8 @@ function mapSessionStart(line: string, fallbackSid: string): NormalizedEvent {
     metadata: {
       sessionId: sid,
       copilotVersion: parsed.attrs?.copilotVersion ?? "unknown",
-      vscodeVersion: parsed.attrs?.vscodeVersion ?? "unknown"
+      vscodeVersion: parsed.attrs?.vscodeVersion ?? "unknown",
+      transcriptPath: transcriptPath ?? null
     }
   };
 }

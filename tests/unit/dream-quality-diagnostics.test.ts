@@ -4,11 +4,15 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildDreamQualityDiagnostics } from "../../src/eval/dream-quality-diagnostics.js";
 import type { DreamConfig } from "../../src/dream/config.js";
+import { workspaceStorageDir } from "../../src/dream/dreamer-home.js";
 
 const tempDirs: string[] = [];
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(workspaceStorageDir(dir), { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("buildDreamQualityDiagnostics", () => {
@@ -18,10 +22,13 @@ describe("buildDreamQualityDiagnostics", () => {
 
     const sessionDir = join(workspaceDir, "fixtures", "debug-logs", "session-1");
     const transcriptDir = join(workspaceDir, "fixtures", "transcripts");
+    const storageReportsDir = join(workspaceStorageDir(workspaceDir), "reports");
     mkdirSync(sessionDir, { recursive: true });
     mkdirSync(transcriptDir, { recursive: true });
-    mkdirSync(join(workspaceDir, "reports"), { recursive: true });
-    mkdirSync(join(workspaceDir, ".dreamer"), { recursive: true });
+    mkdirSync(storageReportsDir, { recursive: true });
+    // copilot-memory is config-specified so can live anywhere; use a stable temp path
+    const copilotMemoryDir = join(workspaceDir, ".dreamer");
+    mkdirSync(copilotMemoryDir, { recursive: true });
 
     writeFileSync(join(sessionDir, "main.jsonl"), '{"type":"session_start"}\n', "utf8");
     writeFileSync(join(sessionDir, "models.json"), "[]", "utf8");
@@ -35,18 +42,18 @@ describe("buildDreamQualityDiagnostics", () => {
       "utf8"
     );
     writeFileSync(
-      join(workspaceDir, ".dreamer", "copilot-memory.json"),
+      join(copilotMemoryDir, "copilot-memory.json"),
       JSON.stringify({ records: [{ statement: "Observed provider_summary=inspected diagnostics flow" }] }),
       "utf8"
     );
     writeFileSync(
-      join(workspaceDir, "reports", "pipeline-log.json"),
+      join(storageReportsDir, "pipeline-log.json"),
       JSON.stringify({ providerOutputs: { summary: "Long-running transcript about report provenance." } }),
       "utf8"
     );
-    writeFileSync(join(workspaceDir, "reports", "dream-diary.md"), "ok\n", "utf8");
-    writeFileSync(join(workspaceDir, "reports", "governance.json"), "{}\n", "utf8");
-    writeFileSync(join(workspaceDir, "reports", "metrics.json"), "{}\n", "utf8");
+    writeFileSync(join(storageReportsDir, "dream-diary.md"), "ok\n", "utf8");
+    writeFileSync(join(storageReportsDir, "governance.json"), "{}\n", "utf8");
+    writeFileSync(join(storageReportsDir, "metrics.json"), "{}\n", "utf8");
 
     const config = {
       adapterId: "adapter.copilot.debug",
@@ -60,7 +67,7 @@ describe("buildDreamQualityDiagnostics", () => {
       codexTracePath: "",
       terminalCastPath: "",
       browserHarPath: "",
-      copilotMemoryPath: join(workspaceDir, ".dreamer", "copilot-memory.json"),
+      copilotMemoryPath: join(copilotMemoryDir, "copilot-memory.json"),
       honchoExportPath: join(workspaceDir, ".dreamer", "honcho.json"),
       honchoWorkspaceId: "dreamer",
       copilotSdkModel: "test-model",
@@ -75,13 +82,26 @@ describe("buildDreamQualityDiagnostics", () => {
     } satisfies DreamConfig;
 
     const diagnostics = (await buildDreamQualityDiagnostics(workspaceDir, config)) as {
-      transcriptSummary?: { messageCount?: number; toolCount?: number; sampleUserMessages?: string[] };
+      transcriptSummary?: {
+        messageCount?: number;
+        toolCount?: number;
+        sampleUserMessages?: string[];
+        conversationReplay?: Array<{ role: string; content: string }>;
+      };
       derivedConclusions?: { memoryStatements?: string[]; providerSummaryPreview?: string };
     };
 
     expect(diagnostics.transcriptSummary?.messageCount).toBe(2);
     expect(diagnostics.transcriptSummary?.toolCount).toBe(1);
     expect(diagnostics.transcriptSummary?.sampleUserMessages?.[0]).toContain("Need better provenance");
+    expect(diagnostics.transcriptSummary?.conversationReplay?.[0]).toEqual({
+      role: "user",
+      content: "Need better provenance in reports"
+    });
+    expect(diagnostics.transcriptSummary?.conversationReplay?.[1]).toEqual({
+      role: "assistant",
+      content: "I will inspect diagnostics and reporting flow"
+    });
     expect(diagnostics.derivedConclusions?.memoryStatements?.[0]).toContain("Observed provider_summary");
     expect(diagnostics.derivedConclusions?.providerSummaryPreview).toContain("Long-running transcript");
   });

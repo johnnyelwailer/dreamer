@@ -6,6 +6,7 @@ import {
   CopilotSdkProvider
 } from "../src/providers/copilot-sdk-provider.js";
 import { readDreamConfig } from "../src/dream/config.js";
+import { createTtyStatus } from "../src/shared/tty-progress.js";
 
 type EvalResult = {
   id: string;
@@ -37,16 +38,19 @@ async function main(): Promise<void> {
   const model = config.copilotSdkModel;
   const evalCases = readEvalCases(workspaceDir, runtime);
   const provider = new CopilotSdkProvider(config.copilotSdkProviderOptions);
+  const status = createTtyStatus("[eval:copilot-sdk]");
 
   try {
+    status.update(`start cases=${evalCases.length} model=${model}`);
     const results: EvalResult[] = [];
-    for (const test of evalCases) {
+    for (const [index, test] of evalCases.entries()) {
+      status.update(`case ${index + 1}/${evalCases.length} ${test.id}`);
       const started = Date.now();
       let output = "";
       let lastError = "";
       for (let attempt = 1; attempt <= runtime.eval.maxAttempts; attempt += 1) {
         try {
-          output = await withTimeout(provider.summarize(test.prompt), runtime.eval.requestTimeoutMs);
+          output = await status.track(`case ${index + 1}/${evalCases.length} ${test.id} · attempt ${attempt}/${runtime.eval.maxAttempts}`, withTimeout(provider.summarize(test.prompt), runtime.eval.requestTimeoutMs));
           if (output && output !== COPILOT_SDK_PROVIDER_REQUEST_FAILED) break;
           lastError = output;
         } catch (error) {
@@ -66,6 +70,7 @@ async function main(): Promise<void> {
         output,
         error: output ? undefined : lastError || "No response text returned"
       });
+      status.update(`case done ${test.id} passed=${String(results.at(-1)?.passed ?? false)}`);
     }
 
     const passed = results.filter((result) => result.passed).length;
@@ -86,6 +91,7 @@ async function main(): Promise<void> {
 
     console.log(JSON.stringify(summary, null, 2));
     console.log(`saved_eval_report=${outPath}`);
+    status.done(`finished passed=${passed}/${results.length}`);
     if (summary.failed > 0) process.exitCode = 1;
   } finally {
     await provider.dispose();

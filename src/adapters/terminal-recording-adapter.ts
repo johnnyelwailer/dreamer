@@ -11,6 +11,10 @@ export class TerminalRecordingAdapter implements TranscriptAdapter {
 
   constructor(private readonly castFilePath: string) {}
 
+  evidenceFiles() {
+    return [{ path: this.castFilePath, kind: "event-log" as const }];
+  }
+
   async ingest(checkpoint?: unknown): Promise<{ events: NormalizedEvent[]; cursor?: string }> {
     const since = typeof checkpoint === "string" ? checkpoint : undefined;
     const raw = await readFile(this.castFilePath, "utf8").catch(() => "");

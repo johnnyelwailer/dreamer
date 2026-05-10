@@ -6,7 +6,7 @@
       "authMode": "logged-in-user",
       "providerMode": "copilot",
       "requestTimeoutMs": 120000,
-      "infiniteSessionsEnabled": false,
+      "infiniteSessionsEnabled": true,
       "gitHubTokenEnvVar": "GITHUB_TOKEN",
       "cliPathEnvVar": "COPILOT_SDK_CLI_PATH",
       "cliUrlEnvVar": "COPILOT_SDK_CLI_URL",

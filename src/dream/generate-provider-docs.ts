@@ -2,9 +2,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { IntelligenceProvider } from "../core/contracts.js";
-import { assertSafeWritePath } from "../core/safety.js";
 import type { DreamContext } from "../core/types.js";
 import type { DreamConfig } from "./config.js";
+import { workspaceStorageDir } from "./dreamer-home.js";
 
 type GeneratedFile = { path: string; content: string };
 
@@ -61,7 +61,7 @@ export async function writeProviderDocs(
   provider: IntelligenceProvider,
   config: DreamConfig
 ): Promise<void> {
-  const outDir = assertSafeWritePath(context.workspaceDir, join(context.workspaceDir, config.docsOutputRootPath));
+  const outDir = join(workspaceStorageDir(context.workspaceDir), "generated-docs");
   await mkdir(outDir, { recursive: true });
   // docsPromptTemplatePath is an absolute path to a bundled asset or user override
   const promptTemplate = await readFile(config.docsPromptTemplatePath, "utf8");
@@ -71,7 +71,7 @@ export async function writeProviderDocs(
 
   const files = parseResponse(raw);
   if (!files.length) {
-    const fallbackPath = assertSafeWritePath(context.workspaceDir, join(context.workspaceDir, config.docsFallbackOutputPath));
+    const fallbackPath = join(workspaceStorageDir(context.workspaceDir), "generated-docs", "DREAM_OUTPUT.md");
     await mkdir(dirname(fallbackPath), { recursive: true });
     await writeFile(fallbackPath, `${raw.trim()}\n`, "utf8");
     context.metrics.docsGenerated += 1;
@@ -86,7 +86,7 @@ export async function writeProviderDocs(
       .replace(new RegExp(`^${normalizedOutputRoot}/`), "")
       .replace(/^\/+/, "")
       .replace(/^docs\//, "");
-    const filePath = assertSafeWritePath(context.workspaceDir, join(outDir, safeRelative));
+    const filePath = join(outDir, safeRelative);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, `${file.content.trim()}\n`, "utf8");
     context.metrics.docsGenerated += 1;

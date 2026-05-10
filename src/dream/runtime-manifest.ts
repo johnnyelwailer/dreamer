@@ -5,7 +5,7 @@ import {
 } from "./runtime-manifest-parse.js";
 import { parseDreamQualityRubricObject, parseEvalCasesObject } from "./runtime-manifest-content-parse.js";
 import type { DreamQualityRubricConfig, EvalCaseConfig, RuntimeManifest } from "./runtime-manifest-types.js";
-import { workspaceStorageDir } from "./dreamer-home.js";
+import { resolveAssetPath, workspaceStorageDir } from "./dreamer-home.js";
 
 export type {
   CopilotSdkAuthMode,
@@ -34,7 +34,13 @@ export function runtimeManifestPath(workspaceDir: string): string {
 
 export function readRuntimeManifest(workspaceDir: string): RuntimeManifest {
   const path = runtimeManifestPath(workspaceDir);
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    raw = readFileSync(resolveAssetPath("runtime-defaults.json"), "utf8");
+  }
+  const parsed = JSON.parse(raw) as unknown;
   return parseRuntimeManifestObject(parsed);
 }
 

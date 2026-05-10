@@ -1,5 +1,6 @@
 import { basename, join } from "node:path";
 import type { DreamConfig } from "../dream/config.js";
+import { workspaceStorageDir } from "../dream/dreamer-home.js";
 import {
   previewFile,
   countMemoryRecords,
@@ -28,10 +29,11 @@ async function buildTranscriptPreviews(config: DreamConfig): Promise<FilePreview
 }
 
 export async function buildDreamQualityDiagnostics(workspaceDir: string, config: DreamConfig): Promise<unknown> {
-  const fileMemoryPath = join(workspaceDir, ".dreamer", "memory.json");
+  const storageDir = workspaceStorageDir(workspaceDir);
+  const fileMemoryPath = join(storageDir, "memory.json");
   const copilotMemoryPath = config.copilotMemoryPath;
   const honchoMemoryPath = config.honchoExportPath;
-  const pipelineLogPath = join(workspaceDir, "reports", "pipeline-log.json");
+  const pipelineLogPath = join(storageDir, "reports", "pipeline-log.json");
 
   const [
     transcriptPreviews,
@@ -49,9 +51,9 @@ export async function buildDreamQualityDiagnostics(workspaceDir: string, config:
     await Promise.all([
       buildTranscriptPreviews(config),
       config.adapterId === "adapter.copilot.debug" ? summarizeCopilotTranscript(config.copilotDebugSessionDir) : undefined,
-      previewFile(join(workspaceDir, "reports", "dream-diary.md"), 20),
-      previewFile(join(workspaceDir, "reports", "governance.json"), 40),
-      previewFile(join(workspaceDir, "reports", "metrics.json"), 40),
+      previewFile(join(storageDir, "reports", "dream-diary.md"), 20),
+      previewFile(join(storageDir, "reports", "governance.json"), 40),
+      previewFile(join(storageDir, "reports", "metrics.json"), 40),
       previewFile(pipelineLogPath, 40),
       countMemoryRecords(fileMemoryPath),
       countMemoryRecords(copilotMemoryPath),

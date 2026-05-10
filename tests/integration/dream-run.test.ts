@@ -21,14 +21,14 @@ describe("dream run integration", () => {
       const info = await stat(file);
       expect(info.isFile()).toBe(true);
     }
-    const docsDir = join(workspaceDir, "docs", "generated");
+    const docsDir = join(storageDir, "generated-docs");
     const generatedDocs = (await readdir(docsDir)).filter((name) => name.endsWith(".md"));
     expect(generatedDocs.length).toBeGreaterThan(0);
     const firstDoc = await readFile(join(docsDir, generatedDocs[0] ?? ""), "utf8");
     expect(firstDoc.trim().length).toBeGreaterThan(20);
     expect(firstDoc).not.toContain("Generated architecture notes");
     delete process.env.DREAM_MIN_SESSIONS;
-    await rm(join(workspaceDir, "docs/generated"), { recursive: true, force: true });
+    await rm(join(storageDir, "generated-docs"), { recursive: true, force: true });
     await rm(join(storageDir, "reports"), { recursive: true, force: true });
   });
 
@@ -58,7 +58,7 @@ describe("dream run integration", () => {
     delete process.env.COPILOT_SDK_BASE_URL;
     delete process.env.COPILOT_SDK_API_KEY;
     delete process.env.COPILOT_SDK_MODEL;
-    await rm(join(workspaceDir, "docs/generated"), { recursive: true, force: true });
+    await rm(join(storageDir, "generated-docs"), { recursive: true, force: true });
     await rm(join(storageDir, "reports"), { recursive: true, force: true });
   });
 });
