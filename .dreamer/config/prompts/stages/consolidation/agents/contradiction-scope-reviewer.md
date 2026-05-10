@@ -19,4 +19,4 @@ Example:
   - "In exploratory sandbox side projects, user prefers frequent commit/push after completed changes."
   - "In customer-facing or QA-sensitive projects, user wants review before commit/push."
 
-Do not call write_memory or remove_memory. Return an action plan for memory-editor.
+Do not call write_memory, remove_memory, or finalize_consolidation. Return an action plan for the main consolidation agent and reference-validator.

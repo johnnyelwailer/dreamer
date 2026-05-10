@@ -19,7 +19,8 @@
     "improve:dream": "node --import tsx scripts/run-safe-workspace.ts --command \"pnpm improve:dream:unsafe\"",
     "improve:dream:unsafe": "node --import tsx scripts/run-dream-self-improve.ts",
     "safe:improve:dream": "pnpm improve:dream",
-    "safe:eval:dream-quality": "pnpm eval:dream-quality"
+    "safe:eval:dream-quality": "pnpm eval:dream-quality",
+    "test:subagent-delegation": "node --import tsx scripts/test-subagent-delegation.ts"
   },
   "dependencies": {
     "@github/copilot-sdk": "^0.3.0",

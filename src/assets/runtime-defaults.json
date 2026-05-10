@@ -38,7 +38,19 @@
       "stage.signal": {
         "defaultAgent": {
           "excludedTools": [
-            "record_insight"
+            "read_file",
+            "get_message_details",
+            "bash",
+            "read_bash",
+            "view",
+            "grep_search",
+            "file_search",
+            "semantic_search",
+            "list_dir",
+            "run_in_terminal",
+            "send_to_terminal",
+            "get_terminal_output",
+            "terminal_last_command"
           ]
         },
         "customAgents": [
@@ -47,84 +59,122 @@
             "displayName": "Behavior Analyst",
             "description": "Extracts communication, collaboration, pushback, clarification, and trust/frustration signals.",
             "tools": [
+              "bash",
+              "read_bash",
+              "view",
               "read_file",
               "get_message_details"
             ],
             "promptTemplatePath": "prompts/stages/signal/agents/behavior-analyst.md",
-            "infer": true
+            "infer": false
           },
           {
             "name": "architecture-analyst",
             "displayName": "Architecture Analyst",
             "description": "Extracts repository conventions, feature decisions, technical constraints, and future edit obligations.",
             "tools": [
+              "bash",
+              "read_bash",
+              "view",
               "read_file",
               "get_message_details"
             ],
             "promptTemplatePath": "prompts/stages/signal/agents/architecture-analyst.md",
-            "infer": true
+            "infer": false
           },
           {
-            "name": "evidence-auditor",
-            "displayName": "Evidence Auditor",
-            "description": "Validates candidate insights against transcript evidence and rejects vague or overbroad memories.",
+            "name": "failure-analyst",
+            "displayName": "Failure Analyst",
+            "description": "Extracts durable lessons from agent failures, tool misuse, eval regressions, and debugging corrections.",
             "tools": [
+              "bash",
+              "read_bash",
+              "view",
               "read_file",
               "get_message_details"
             ],
-            "promptTemplatePath": "prompts/stages/signal/agents/evidence-auditor.md",
-            "infer": true
-          },
-          {
-            "name": "insight-recorder",
-            "displayName": "Insight Recorder",
-            "description": "Writes only approved durable insights through record_insight.",
-            "tools": [
-              "record_insight"
-            ],
-            "promptTemplatePath": "prompts/stages/signal/agents/insight-recorder.md",
+            "promptTemplatePath": "prompts/stages/signal/agents/failure-analyst.md",
             "infer": false
           }
         ],
         "execution": {
-          "mode": "inferred"
+          "mode": "explicit-sequence",
+          "explicitSequence": [
+            "behavior-analyst",
+            "architecture-analyst",
+            "failure-analyst"
+          ]
         }
       },
       "stage.consolidation": {
         "defaultAgent": {
           "excludedTools": [
-            "write_memory",
-            "remove_memory"
+            "list_memories",
+            "read_reference",
+            "bash",
+            "read_bash",
+            "view",
+            "grep_search",
+            "file_search",
+            "semantic_search",
+            "list_dir",
+            "run_in_terminal",
+            "send_to_terminal",
+            "get_terminal_output",
+            "terminal_last_command"
           ]
         },
         "customAgents": [
+          {
+            "name": "memory-inventory-reviewer",
+            "displayName": "Memory Inventory Reviewer",
+            "description": "Summarizes existing memories and flags duplicates, over-specific entries, and broad rules needing cleanup.",
+            "tools": [
+              "bash",
+              "read_bash",
+              "view",
+              "list_memories",
+              "read_reference"
+            ],
+            "promptTemplatePath": "prompts/stages/consolidation/agents/memory-inventory-reviewer.md",
+            "infer": false
+          },
           {
             "name": "contradiction-scope-reviewer",
             "displayName": "Contradiction Scope Reviewer",
             "description": "Classifies conflicts as true conflicts, conditional compatibility, overgeneralized memories, or stale rules.",
             "tools": [
+              "bash",
+              "read_bash",
+              "view",
               "list_memories",
               "read_reference"
             ],
             "promptTemplatePath": "prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
-            "infer": true
+            "infer": false
           },
           {
-            "name": "memory-editor",
-            "displayName": "Memory Editor",
-            "description": "Applies approved consolidation changes through write_memory and remove_memory.",
+            "name": "reference-validator",
+            "displayName": "Reference Validator",
+            "description": "Validates cited references for risky memory writes/removals and reports evidence quality to the main agent.",
             "tools": [
+              "bash",
+              "read_bash",
+              "view",
               "list_memories",
-              "read_reference",
-              "write_memory",
-              "remove_memory"
+              "read_reference"
             ],
-            "promptTemplatePath": "prompts/stages/consolidation/agents/memory-editor.md",
+            "promptTemplatePath": "prompts/stages/consolidation/agents/reference-validator.md",
             "infer": false
           }
         ],
         "execution": {
-          "mode": "inferred"
+          "mode": "explicit-sequence",
+          "explicitSequence": [
+            "memory-inventory-reviewer",
+            "contradiction-scope-reviewer",
+            "reference-validator"
+          ]
         }
       }
     }

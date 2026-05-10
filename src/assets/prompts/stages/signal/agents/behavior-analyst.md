@@ -10,7 +10,7 @@ Find durable interaction and collaboration preferences:
 - when the user expects agents to proceed with assumptions
 - repeated frustration or trust signals caused by agent behavior
 
-Use read_file first. Use get_message_details only for specific message ranges that contain evidence.
+Use read_file or bounded bash commands to inspect the session. Use get_message_details only for specific message ranges that contain evidence. Return a concise evidence summary and candidate memories to the main signal agent.
 
 Do not call record_insight. Produce concise candidate memories with:
 - statement

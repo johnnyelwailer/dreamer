@@ -9,25 +9,31 @@ Sessions written to: {{run_dir}}/sessions/
 
 ## Process
 
-1. Read `{{orientation_path}}` for workspace context (project name, existing memories, AGENTS.md)
-2. For each session file (e.g. `{{run_dir}}/sessions/session-1.md`):
+1. Delegate to specialist agents to read `{{orientation_path}}` for workspace context (project name, existing memories, AGENTS.md)
+2. For each session file (e.g. `{{run_dir}}/sessions/session-1.md`), delegate specialist review:
    - Read the header — it shows source, user turns, tool activity, and file ops at a glance
    - Scan user messages (lines starting with `[N] **user**`) — these are the signal-rich turns
    - When you see a correction, preference, or notable decision, use `get_message_details(session, from_msg, to_msg)` to get the full context including tool calls around those messages
-3. Call `record_insight` for each durable finding with as much context as possible:
+3. Delegate file/session inspection to specialist agents. The main agent should not inspect files or run shell commands directly.
+4. Review the specialists' candidate memories and call `record_insight` yourself for each durable finding with as much context as possible:
    - `category`, `tags`, `rationale`, `applies_when`
    - `horizon` (`short_term` or `long_term`)
    - `reason` (why this should be stored as memory)
    - `references` (at least one object with kind/value when possible)
    - `evidence` with session/message range when available
+5. Call `finalize_signal_extraction` yourself before finishing:
+   - Use `completed` when durable insights were recorded
+   - Use `no_insights_found` only after reviewing the target session and finding no durable insights
+   - Use `blocked` when the session could not be reviewed
 
 If specialist agents are available, delegate:
 - behavior/interactions to `behavior-analyst`
 - technical conventions and future edit obligations to `architecture-analyst`
-- evidence validation to `evidence-auditor`
-- final memory writes to `insight-recorder`
+- agent/tooling failures, eval regressions, and debugging corrections to `failure-analyst`
 
-Only the final recorder should write insights. Analysts should produce candidates with evidence.
+Only the main signal agent should call `record_insight` and `finalize_signal_extraction`. Specialist agents should inspect files, run bounded shell commands when useful, and return candidates with evidence.
+The main signal agent should not call file or shell inspection tools directly. If more evidence is needed, delegate another specialist pass instead.
+Do not use a specialist as a memory writer. Specialists return findings; the main signal agent decides and writes.
 
 ## What to record
 
@@ -82,5 +88,6 @@ Examples:
 ## Efficiency
 
 - Read headers first to prioritize which sessions to explore deeply
-- Use `get_message_details` to drill into specific message ranges, not entire sessions
+- Ask specialist agents to use `get_message_details` to drill into specific message ranges, not entire sessions
+- Ask specialist agents to use `bash` for bounded file inspection (`wc -l`, `sed -n`, `rg`, `head`, `tail`) when useful. `read_bash` is only valid when a previous `bash` call explicitly returned a real `shellId`; never invent or guess a shell ID.
 - Stop after covering all sessions and recording all durable findings

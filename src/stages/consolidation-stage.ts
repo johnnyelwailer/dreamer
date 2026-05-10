@@ -52,7 +52,7 @@ async function loadPrompt(insights: InsightRecord[], orientationPath: string): P
     const template = await readFile(resolveAssetPath("prompts/consolidation-stage.md"), "utf8");
     return template.replace("{{insights}}", insightList).replace("{{orientation_path}}", orientationPath);
   } catch {
-    return `Consolidate these insights into long-term memory.\n\nNew insights:\n${insightList}\n\nCall list_memories, then write_memory or remove_memory as appropriate.`;
+    return `Consolidate these insights into long-term memory.\n\nNew insights:\n${insightList}\n\nDelegate memory listing/reference inspection to specialist agents, then call write_memory/remove_memory and finalize_consolidation yourself.`;
   }
 }
 

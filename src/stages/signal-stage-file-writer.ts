@@ -27,18 +27,19 @@ export async function writeSessionFiles(runDir: string, events: NormalizedEvent[
   const sessionsDir = join(runDir, "sessions");
   await mkdir(sessionsDir, { recursive: true });
 
-  const starts = events.filter((e) => e.kind === "session_start");
+  const startIndexes = events
+    .map((event, index) => ({ event, index }))
+    .filter((entry) => entry.event.kind === "session_start");
+  const starts = startIndexes.map((entry) => entry.event);
   if (starts.length === 0) return [];
 
   const written: WrittenSession[] = [];
 
   for (let i = 0; i < starts.length; i++) {
     const start = starts[i]!;
-    const next = starts[i + 1];
-    const inSession = (e: NormalizedEvent) =>
-      e.timestamp >= start.timestamp && (!next || e.timestamp < next.timestamp);
-
-    const sessionEvents = events.filter(inSession);
+    const startIndex = startIndexes[i]!.index;
+    const nextStartIndex = i + 1 < startIndexes.length ? startIndexes[i + 1]!.index : events.length;
+    const sessionEvents = events.slice(startIndex, nextStartIndex);
     const msgEvents = sessionEvents.filter((e) => e.kind === "message");
     const toolEvents = sessionEvents.filter((e) => e.kind === "tool");
 

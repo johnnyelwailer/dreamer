@@ -74,4 +74,26 @@ describe("writeSessionFiles", () => {
     expect(s2).toContain("session two");
     expect(s2).not.toContain("session one");
   });
+
+  it("splits sessions by event order even when session_start timestamps are identical", async () => {
+    const ts = "2026-01-01T10:00:00.000Z";
+    const events: NormalizedEvent[] = [
+      event({ id: "s1", kind: "session_start", timestamp: ts, metadata: { sessionId: "sess1" } }),
+      event({ id: "m1", kind: "message", timestamp: ts, text: "first session content", metadata: { role: "user" } }),
+      event({ id: "s2", kind: "session_start", timestamp: ts, metadata: { sessionId: "sess2" } }),
+      event({ id: "m2", kind: "message", timestamp: ts, text: "second session content", metadata: { role: "user" } })
+    ];
+
+    const written = await writeSessionFiles(dir, events);
+    expect(written).toHaveLength(2);
+    expect(written[0]?.messageCount).toBe(1);
+    expect(written[1]?.messageCount).toBe(1);
+
+    const s1 = await readFile(join(dir, "sessions", "session-1.md"), "utf8");
+    const s2 = await readFile(join(dir, "sessions", "session-2.md"), "utf8");
+    expect(s1).toContain("first session content");
+    expect(s1).not.toContain("second session content");
+    expect(s2).toContain("second session content");
+    expect(s2).not.toContain("first session content");
+  });
 });

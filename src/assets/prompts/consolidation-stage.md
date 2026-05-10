@@ -5,26 +5,28 @@ Workspace context (project name, AGENTS.md): {{orientation_path}}
 New insights extracted this run:
 {{insights}}
 
-Use tools to integrate these into the memory store:
-1. Call list_memories to see what already exists
-2. Review the full memory store, not just new insights. Perform a hygiene pass across every existing memory:
+Use specialist agents to gather the information needed to integrate these into the memory store:
+1. Delegate to specialist agents to call list_memories and summarize what already exists
+2. Have specialist agents review the full memory store, not just new insights. They should perform a hygiene pass across every existing memory:
    - validate stale or suspicious memories against their references with read_reference
    - merge duplicates and near-duplicates
    - generalize memories that are too specific but represent a reusable rule
    - localize memories that are only true for one feature/session/file by adding applies_when, tags, evidence, and references
    - remove memories that are unsupported, contradicted, obsolete, or too narrow to be useful
-3. **Before writing any memory**, compare it against: (a) all existing memories from list_memories, and (b) any memory you've already written this run. If the same fact, entity, URL, file, or convention appears in more than one place, merge them into a single entry — do NOT write duplicates.
-4. For each new insight and each existing memory, decide:
+3. Review the specialist summaries yourself. **Before writing any memory**, compare it against: (a) all existing memories reported by specialists, and (b) any memory you've already written this run. If the same fact, entity, URL, file, or convention appears in more than one place, merge them into a single entry — do NOT write duplicates.
+4. For each new insight and each existing memory, decide and apply final changes yourself:
    - write_memory if it's new or reinforces existing knowledge
    - Skip if already covered adequately (including by a memory you just wrote)
    - remove_memory(id) + write_memory for contradicted/outdated memories
    - remove_memory(id) + write_memory for memories that need generalization or stricter local metadata
 
 If specialist agents are available, delegate:
+- existing-memory inventory, deduplication, and broad/narrow cleanup to `memory-inventory-reviewer`
 - contradiction/scope classification to `contradiction-scope-reviewer`
-- final memory writes/removals to `memory-editor`
+- source/reference validation for risky changes to `reference-validator`
 
-Only the memory editor should call write_memory or remove_memory.
+Only the main consolidation agent should call `write_memory`, `remove_memory`, and `finalize_consolidation`. Specialist agents must inspect sources and return summaries/recommendations for the main agent to apply. The main consolidation agent should not call file, shell, list, or reference-inspection tools directly; delegate another specialist pass if more evidence is needed.
+Do not use a specialist as a memory writer. Specialists return action plans; the main consolidation agent applies final changes.
 
 Required fields for every `write_memory` call:
 - `reason`: why this qualifies as durable memory
@@ -38,7 +40,7 @@ Strongly recommended fields:
 Consolidation rules:
 - Scope: use "user" for personal preferences/habits, "workspace" for project-specific facts
 - Confidence: 0.9 for clear explicit corrections, 0.85 for observed patterns, 0.75 for inferred preferences
-- Source validation: use read_reference before pruning, contradicting, or materially rewriting a memory with references. If references are missing or unreadable, lower confidence or add precise run/session references rather than inventing certainty.
+- Source validation: require specialist summaries from read_reference before pruning, contradicting, or materially rewriting a memory with references. If references are missing or unreadable, lower confidence or add precise run/session references rather than inventing certainty.
 - Deduplicate: before calling write_memory, check whether a memory covering the same fact (same file path, URL, command, or concept) already exists — if so, merge and skip the duplicate
 - Merge/generalize: if several narrow memories point to the same stable rule, replace them with one broader memory that keeps the important applies_when boundaries and references
 - Localize: if an insight is super-specific, either skip it or write it with tight applies_when, tags, evidence, and references so future agents do not overapply it
@@ -65,4 +67,4 @@ Bad memories (do NOT write):
 ✗ "Always ask questions before doing anything" (overbroad; normalize to when clarification is needed)
 ✗ "Button X changes A.y to ACCEPTED" (too local unless tied to a specific feature/file with applies_when and evidence)
 
-Call list_memories first, then make your changes.
+Delegate memory listing and reference inspection first, then make the final tool calls yourself.

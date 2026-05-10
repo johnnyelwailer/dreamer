@@ -57,4 +57,88 @@ describe("createSignalTools", () => {
     expect(captured[0]?.capture?.references?.[0]).toEqual({ kind: "session", value: "session-1" });
     expect(captured[0]?.evidence?.[0]?.sessionId).toBe("session-abc");
   });
+
+  it("rejects insight writes without references when no session hint is available", async () => {
+    const captured: InsightRecord[] = [];
+    const session: WrittenSession = {
+      sessionIndex: 1,
+      events: [event({ id: "m1", text: "A meaningful user preference", metadata: { role: "user" } })],
+      messageCount: 1
+    };
+    const tools = createSignalTools("/tmp/dreamer-run", [session], (insight) => captured.push(insight));
+    const recordInsight = tools.find((tool) => tool.name === "record_insight") as
+      | { handler: (args: Record<string, unknown>) => unknown | Promise<unknown> }
+      | undefined;
+
+    const result = await recordInsight?.handler({
+      statement: "User prefers compact reports.",
+      scope: "user"
+    });
+
+    expect(captured).toHaveLength(0);
+    expect(result).toEqual(
+      expect.objectContaining({
+        resultType: "error"
+      })
+    );
+  });
+
+  it("auto-adds session reference/evidence from session hint", async () => {
+    const captured: InsightRecord[] = [];
+    const session: WrittenSession = {
+      sessionIndex: 1,
+      events: [event({ id: "s1", kind: "session_start", metadata: { sessionId: "session-xyz" } })],
+      messageCount: 0
+    };
+    const tools = createSignalTools("/tmp/dreamer-run", [session], (insight) => captured.push(insight), {
+      sessionId: "session-xyz"
+    });
+    const recordInsight = tools.find((tool) => tool.name === "record_insight") as
+      | { handler: (args: Record<string, unknown>) => unknown | Promise<unknown> }
+      | undefined;
+
+    await recordInsight?.handler({
+      statement: "Use non-destructive git commands while fixing regressions.",
+      scope: "workspace",
+      references: [{ kind: "doc", value: "workflow:git-safety" }]
+    });
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.capture?.references).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "session", value: "session-xyz" })])
+    );
+    expect(captured[0]?.evidence).toEqual(expect.arrayContaining([expect.objectContaining({ sessionId: "session-xyz" })]));
+  });
+
+  it("records an explicit no-insights final verdict", async () => {
+    let verdict: { status: string; summary: string } | null = null;
+    const session: WrittenSession = {
+      sessionIndex: 1,
+      events: [event({ id: "m1", text: "No durable content", metadata: { role: "user" } })],
+      messageCount: 1
+    };
+    const tools = createSignalTools(
+      "/tmp/dreamer-run",
+      [session],
+      () => undefined,
+      { sessionId: "session-xyz" },
+      (next) => {
+        verdict = next;
+      }
+    );
+    const finalize = tools.find((tool) => tool.name === "finalize_signal_extraction") as
+      | { handler: (args: Record<string, unknown>) => unknown | Promise<unknown> }
+      | undefined;
+
+    const result = await finalize?.handler({
+      status: "no_insights_found",
+      summary: "Reviewed the session and found no durable preferences or workspace rules."
+    });
+
+    expect(result).toEqual(expect.objectContaining({ resultType: "success" }));
+    expect(verdict).toEqual({
+      status: "no_insights_found",
+      summary: "Reviewed the session and found no durable preferences or workspace rules."
+    });
+  });
 });

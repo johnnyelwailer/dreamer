@@ -89,10 +89,12 @@ describe("buildCopilotSdkProviderOptions", () => {
     const models = options.clientOptions.onListModels?.();
 
     expect(models).toBeDefined();
+    expect(Array.isArray(models)).toBe(true);
+    if (!Array.isArray(models)) throw new Error("Expected synchronous model list");
     expect(models).toHaveLength(1);
-    expect(models?.[0].id).toBe("gpt-5");
-    expect(models?.[0].capabilities?.limits?.max_context_window_tokens).toBe(64000);
-    expect(models?.[0].capabilities?.limits?.max_prompt_tokens).toBe(16000);
+    expect(models[0]?.id).toBe("gpt-5");
+    expect(models[0]?.capabilities?.limits?.max_context_window_tokens).toBe(64000);
+    expect(models[0]?.capabilities?.limits?.max_prompt_tokens).toBe(16000);
   });
 
   it("does not add custom model listing outside BYOK", () => {
@@ -118,6 +120,22 @@ describe("buildCopilotSdkProviderOptions", () => {
 });
 
 describe("parseRuntimeManifestObject", () => {
+  const mainSignalExcludedTools = [
+    "read_file",
+    "get_message_details",
+    "bash",
+    "read_bash",
+    "view",
+    "grep_search",
+    "file_search",
+    "semantic_search",
+    "list_dir",
+    "run_in_terminal",
+    "send_to_terminal",
+    "get_terminal_output",
+    "terminal_last_command"
+  ];
+
   it("parses provider.sdk.infiniteSessionsEnabled when provided", () => {
     const parsed = parseRuntimeManifestObject({
       provider: {
@@ -216,26 +234,26 @@ describe("parseRuntimeManifestObject", () => {
         stageOrder: ["stage.orientation", "stage.signal"],
         agentPacks: {
           "stage.signal": {
-            defaultAgent: { excludedTools: ["record_insight"] },
+            defaultAgent: { excludedTools: mainSignalExcludedTools },
             customAgents: [
               {
                 name: "timeline-analyst",
                 displayName: "Timeline Analyst",
                 description: "Extracts retries and chronology",
-                tools: ["read_file", "get_message_details"],
+                tools: ["bash", "read_bash", "view", "read_file", "get_message_details"],
                 promptTemplatePath: ".dreamer/config/prompts/stages/signal/timeline.md",
                 infer: true
               },
               {
-                name: "insight-recorder",
-                tools: ["record_insight"],
-                promptTemplatePath: ".dreamer/config/prompts/stages/signal/recorder.md",
-                infer: false
+                name: "failure-analyst",
+                tools: ["bash", "read_bash", "view", "read_file", "get_message_details"],
+                promptTemplatePath: ".dreamer/config/prompts/stages/signal/failure.md",
+                infer: true
               }
             ],
             execution: {
               mode: "explicit-sequence",
-              explicitSequence: ["timeline-analyst", "insight-recorder"]
+              explicitSequence: ["timeline-analyst", "failure-analyst"]
             }
           }
         }
@@ -265,11 +283,11 @@ describe("parseRuntimeManifestObject", () => {
     });
 
     const pack = parsed.pipeline.agentPacks?.["stage.signal"];
-    expect(pack?.defaultAgent?.excludedTools).toEqual(["record_insight"]);
+    expect(pack?.defaultAgent?.excludedTools).toEqual(mainSignalExcludedTools);
     expect(pack?.customAgents).toHaveLength(2);
     expect(pack?.customAgents[0]?.name).toBe("timeline-analyst");
     expect(pack?.execution?.mode).toBe("explicit-sequence");
-    expect(pack?.execution?.explicitSequence).toEqual(["timeline-analyst", "insight-recorder"]);
+    expect(pack?.execution?.explicitSequence).toEqual(["timeline-analyst", "failure-analyst"]);
   });
 
   it("rejects invalid pipeline.agentPacks.defaultAgent", () => {
