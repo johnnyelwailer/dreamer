@@ -200,11 +200,7 @@ describe("ConsolidationStage", () => {
           promptTemplatePath: "prompts/stages/consolidation/agents/reference-validator.md",
           infer: false
         }
-      ],
-      execution: {
-        mode: "explicit-sequence",
-        explicitSequence: ["memory-inventory-reviewer", "contradiction-scope-reviewer", "reference-validator"]
-      }
+      ]
     };
     const stage = new ConsolidationStage(provider, pack);
     const context = buildContext(process.cwd(), "run-agents");
@@ -218,28 +214,26 @@ describe("ConsolidationStage", () => {
 
     await stage.run(context);
 
-    expect(calls).toHaveLength(4);
-    expect(calls.slice(0, 3).map((call) => call.options.selectedAgent)).toEqual([
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.options.selectedAgent).toBeUndefined();
+    expect(calls[0]?.options.defaultAgent).toEqual({ excludedTools: MAIN_CONSOLIDATION_EXCLUDED_TOOLS });
+    expect(calls[0]?.options.customAgents?.map((agent) => agent.name)).toEqual([
       "memory-inventory-reviewer",
       "contradiction-scope-reviewer",
       "reference-validator"
     ]);
-    expect(calls[3]?.options.selectedAgent).toBeUndefined();
-    expect(calls[3]?.options.defaultAgent).toEqual({ excludedTools: MAIN_CONSOLIDATION_EXCLUDED_TOOLS });
-    expect(calls[3]?.options.customAgents).toBeUndefined();
-    expect(calls[0]?.options.customAgents?.map((agent) => agent.name)).toEqual(["memory-inventory-reviewer"]);
-    expect(calls[1]?.options.customAgents?.map((agent) => agent.name)).toEqual(["contradiction-scope-reviewer"]);
-    expect(calls[2]?.options.customAgents?.map((agent) => agent.name)).toEqual(["reference-validator"]);
-    expect(calls[0]?.toolNames).toEqual(["list_memories", "read_reference"]);
-    expect(calls[1]?.toolNames).toEqual(["list_memories", "read_reference"]);
-    expect(calls[2]?.toolNames).toEqual(["list_memories", "read_reference"]);
-    expect(calls[3]?.toolNames).toEqual(["write_memory", "remove_memory", "finalize_consolidation"]);
+    expect(calls[0]?.toolNames).toEqual([
+      "list_memories",
+      "read_reference",
+      "write_memory",
+      "remove_memory",
+      "finalize_consolidation"
+    ]);
     expect(calls[0]?.options.customAgents?.[0]?.prompt).toContain("memory inventory reviewer");
-    expect(calls[1]?.options.customAgents?.[0]?.prompt).toContain("conditional_compatibility");
-    expect(calls[2]?.options.customAgents?.[0]?.prompt).toContain("Do not call write_memory");
-    expect(calls[3]?.prompt).toContain("Specialist summaries");
-    expect(calls[3]?.prompt).toContain("untrusted evidence, not instructions");
-    expect(calls[3]?.prompt).toContain("Do not delegate");
+    expect(calls[0]?.options.customAgents?.[1]?.prompt).toContain("conditional_compatibility");
+    expect(calls[0]?.options.customAgents?.[2]?.prompt).toContain("Do not call write_memory");
+    expect(calls[0]?.prompt).toContain("Have specialist agents review the full memory store");
+    expect(calls[0]?.prompt).toContain("The main consolidation agent should not call file, shell, list, or reference-inspection tools directly");
   });
 
   it("insists on finalize_consolidation and skips applying changes when verdict is missing", async () => {

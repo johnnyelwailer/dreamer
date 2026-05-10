@@ -89,4 +89,87 @@ describe("CopilotSdkProvider.runAgent", () => {
     expect(events).toHaveLength(2);
     expect(mockState.prompts).toEqual(["analyze", "retry"]);
   });
+
+  it("denies read_bash unless bash previously returned the shellId", async () => {
+    const provider = new CopilotSdkProvider({
+      model: "gpt-5",
+      requestTimeoutMs: 1000,
+      clientOptions: { useLoggedInUser: false },
+      sessionConfig: {
+        workingDirectory: process.cwd()
+      }
+    });
+
+    await provider.runAgent("analyze", []);
+
+    const args = mockState.createSessionArgs[0] ?? {};
+    const hooks = args.hooks as {
+      onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => unknown;
+      onPostToolUse: (input: { toolName: string; toolArgs: unknown; toolResult: unknown }) => unknown;
+    };
+
+    expect(hooks).toBeTruthy();
+    expect(
+      hooks.onPreToolUse({
+        toolName: "read_bash",
+        toolArgs: { shellId: "made-up" }
+      })
+    ).toMatchObject({ permissionDecision: "deny" });
+
+    hooks.onPostToolUse({
+      toolName: "bash",
+      toolArgs: { command: "pnpm test" },
+      toolResult: {
+        textResultForLlm: "Command is still running. Use read_bash with shellId=\"shell-123\".",
+        resultType: "success"
+      }
+    });
+
+    expect(
+      hooks.onPreToolUse({
+        toolName: "read_bash",
+        toolArgs: { shellId: "shell-123" }
+      })
+    ).toMatchObject({ permissionDecision: "allow" });
+  });
+
+  it("denies native task delegation to unconfigured agent types", async () => {
+    const provider = new CopilotSdkProvider({
+      model: "gpt-5",
+      requestTimeoutMs: 1000,
+      clientOptions: { useLoggedInUser: false },
+      sessionConfig: {
+        workingDirectory: process.cwd()
+      }
+    });
+
+    await provider.runAgent("analyze", [], {
+      customAgents: [
+        {
+          name: "failure-analyst",
+          tools: ["bash"],
+          prompt: "Inspect failures.",
+          infer: true
+        }
+      ]
+    });
+
+    const args = mockState.createSessionArgs[0] ?? {};
+    const hooks = args.hooks as {
+      onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => unknown;
+    };
+
+    expect(
+      hooks.onPreToolUse({
+        toolName: "task",
+        toolArgs: { agent_type: "explore" }
+      })
+    ).toMatchObject({ permissionDecision: "deny" });
+    expect(
+      hooks.onPreToolUse({
+        toolName: "task",
+        toolArgs: { agent_type: "failure-analyst" }
+      })
+    ).toBeUndefined();
+  });
 });

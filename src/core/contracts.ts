@@ -54,6 +54,7 @@ export type RunAgentCustomAgentConfig = {
 export type RunAgentOptions = {
   workingDirectory?: string;
   retries?: string[];
+  streamTag?: string;
   customAgents?: RunAgentCustomAgentConfig[];
   defaultAgent?: RunAgentDefaultAgentConfig;
   selectedAgent?: string;

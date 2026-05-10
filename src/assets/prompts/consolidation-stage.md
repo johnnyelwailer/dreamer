@@ -27,6 +27,7 @@ If specialist agents are available, delegate:
 
 Only the main consolidation agent should call `write_memory`, `remove_memory`, and `finalize_consolidation`. Specialist agents must inspect sources and return summaries/recommendations for the main agent to apply. The main consolidation agent should not call file, shell, list, or reference-inspection tools directly; delegate another specialist pass if more evidence is needed.
 Do not use a specialist as a memory writer. Specialists return action plans; the main consolidation agent applies final changes.
+Use Copilot's native custom subagent delegation. Delegate one specialist task at a time, wait for that subagent's result, then decide whether another specialist is needed. If a read/wait tool is available for delegated agents, use only the real agent ID returned by the delegation tool; never invent placeholder agent IDs.
 
 Required fields for every `write_memory` call:
 - `reason`: why this qualifies as durable memory

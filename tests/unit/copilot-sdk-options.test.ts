@@ -250,11 +250,7 @@ describe("parseRuntimeManifestObject", () => {
                 promptTemplatePath: ".dreamer/config/prompts/stages/signal/failure.md",
                 infer: true
               }
-            ],
-            execution: {
-              mode: "explicit-sequence",
-              explicitSequence: ["timeline-analyst", "failure-analyst"]
-            }
+            ]
           }
         }
       },
@@ -286,8 +282,7 @@ describe("parseRuntimeManifestObject", () => {
     expect(pack?.defaultAgent?.excludedTools).toEqual(mainSignalExcludedTools);
     expect(pack?.customAgents).toHaveLength(2);
     expect(pack?.customAgents[0]?.name).toBe("timeline-analyst");
-    expect(pack?.execution?.mode).toBe("explicit-sequence");
-    expect(pack?.execution?.explicitSequence).toEqual(["timeline-analyst", "failure-analyst"]);
+    expect(pack?.execution).toBeUndefined();
   });
 
   it("rejects invalid pipeline.agentPacks.defaultAgent", () => {

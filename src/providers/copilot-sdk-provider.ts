@@ -5,7 +5,8 @@ import {
   type CopilotClientOptions,
   type InfiniteSessionConfig,
   type ModelCapabilitiesOverride,
-  type ProviderConfig
+  type ProviderConfig,
+  type ToolResultObject
 } from "@github/copilot-sdk";
 import { createDreamAgentStreamHandler } from "./copilot-sdk-stream.js";
 
@@ -13,6 +14,23 @@ export const COPILOT_SDK_PROVIDER_NO_SUMMARY = "No summary returned.";
 export const COPILOT_SDK_PROVIDER_REQUEST_FAILED = "Copilot SDK provider request failed.";
 type CopilotSession = {
   sendAndWait: (request: { prompt: string }, timeoutMs?: number) => Promise<unknown>;
+};
+
+type ToolHookInput = {
+  toolName: string;
+  toolArgs: unknown;
+  toolResult?: ToolResultObject;
+};
+
+type BashSessionGuardHooks = {
+  onPreToolUse: (input: ToolHookInput) =>
+    | {
+        permissionDecision: "allow" | "deny";
+        permissionDecisionReason?: string;
+        additionalContext?: string;
+      }
+    | undefined;
+  onPostToolUse: (input: ToolHookInput) => undefined;
 };
 
 export type CopilotSdkProviderOptions = {
@@ -52,6 +70,87 @@ function extractAssistantText(response: unknown): string {
   return normalizeText(response).trim();
 }
 
+function readStringField(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const field = record[key];
+  return typeof field === "string" && field.trim() ? field.trim() : undefined;
+}
+
+function scanShellIds(value: unknown, ids: Set<string>): void {
+  if (typeof value === "string") {
+    const patterns = [
+      /\bshellId\b\s*[:=]\s*["']?([A-Za-z0-9._:-]+)/g,
+      /\bshell ID\b\s*[:=]\s*["']?([A-Za-z0-9._:-]+)/gi
+    ];
+    for (const pattern of patterns) {
+      for (const match of value.matchAll(pattern)) {
+        const id = match[1]?.trim();
+        if (id) ids.add(id);
+      }
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) scanShellIds(item, ids);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, field] of Object.entries(value)) {
+    if (key === "shellId" && typeof field === "string" && field.trim()) {
+      ids.add(field.trim());
+    } else {
+      scanShellIds(field, ids);
+    }
+  }
+}
+
+function extractReturnedShellIds(result: ToolResultObject): Set<string> {
+  const ids = new Set<string>();
+  scanShellIds(result, ids);
+  return ids;
+}
+
+function createBashSessionGuardHooks(allowedTaskAgentTypes: Iterable<string> = []): BashSessionGuardHooks {
+  const activeShellIds = new Set<string>();
+  const allowedAgents = new Set([...allowedTaskAgentTypes].map((name) => name.trim()).filter(Boolean));
+  return {
+    onPreToolUse: (input) => {
+      if (input.toolName === "task" && allowedAgents.size > 0) {
+        const agentType = readStringField(input.toolArgs, "agent_type");
+        if (!agentType || !allowedAgents.has(agentType)) {
+          return {
+            permissionDecision: "deny" as const,
+            permissionDecisionReason:
+              "Only configured specialist custom agents may be used for this stage. Built-in or general-purpose agents are disabled.",
+            additionalContext:
+              `Use one of these specialist agent_type values: ${[...allowedAgents].sort().join(", ")}. ` +
+              "Do not use explore, general-purpose, or placeholder agent types."
+          };
+        }
+      }
+      if (input.toolName !== "read_bash") return undefined;
+      const shellId = readStringField(input.toolArgs, "shellId");
+      if (shellId && activeShellIds.has(shellId)) return { permissionDecision: "allow" as const };
+      return {
+        permissionDecision: "deny" as const,
+        permissionDecisionReason:
+          "read_bash is only valid when a previous bash call returned a real shellId for an active shell session. " +
+          "Do not invent shell IDs. For completed bash commands, use the bash result directly. " +
+          "For large files, run bounded bash commands such as wc -l, sed -n, rg, head, or tail.",
+        additionalContext:
+          "The read_bash call was denied because its shellId was not returned by a previous bash call in this session. " +
+          "Use bash directly for bounded file inspection, and only call read_bash after bash returns a shellId."
+      };
+    },
+    onPostToolUse: (input) => {
+      if (input.toolName !== "bash" || input.toolResult?.resultType !== "success") return undefined;
+      for (const id of extractReturnedShellIds(input.toolResult)) activeShellIds.add(id);
+      return undefined;
+    }
+  };
+}
+
 export class CopilotSdkProvider implements IntelligenceProvider {
   readonly id = "provider.copilot.sdk";
   private client: CopilotClient | null = null;
@@ -73,7 +172,8 @@ export class CopilotSdkProvider implements IntelligenceProvider {
       includeSubAgentStreamingEvents: this.options.sessionConfig.includeSubAgentStreamingEvents,
       configDir: this.options.sessionConfig.configDir,
       workingDirectory: this.options.sessionConfig.workingDirectory,
-      onPermissionRequest: approveAll
+      onPermissionRequest: approveAll,
+      hooks: createBashSessionGuardHooks()
     })) as CopilotSession;
     this.client = client;
     return session;
@@ -109,7 +209,7 @@ export class CopilotSdkProvider implements IntelligenceProvider {
 
   async runAgent(prompt: string, tools: unknown[], options: import("../core/contracts.js").RunAgentOptions = {}): Promise<string> {
     const client = new CopilotClient(this.options.clientOptions);
-    const onStreamEvent = createDreamAgentStreamHandler();
+    const onStreamEvent = createDreamAgentStreamHandler({ agentTag: options.selectedAgent ?? options.streamTag ?? "dream agent" });
     let lastOutput = "";
     try {
       await client.start();
@@ -127,6 +227,7 @@ export class CopilotSdkProvider implements IntelligenceProvider {
         defaultAgent: options.defaultAgent as Parameters<typeof client.createSession>[0]["defaultAgent"],
         agent: options.selectedAgent,
         onPermissionRequest: approveAll,
+        hooks: createBashSessionGuardHooks(options.customAgents?.map((agent) => agent.name)),
         onEvent: (event) => {
           onStreamEvent?.(event);
           options.onSubagentEvent?.(event);

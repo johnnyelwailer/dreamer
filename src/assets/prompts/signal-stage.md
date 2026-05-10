@@ -34,6 +34,7 @@ If specialist agents are available, delegate:
 Only the main signal agent should call `record_insight` and `finalize_signal_extraction`. Specialist agents should inspect files, run bounded shell commands when useful, and return candidates with evidence.
 The main signal agent should not call file or shell inspection tools directly. If more evidence is needed, delegate another specialist pass instead.
 Do not use a specialist as a memory writer. Specialists return findings; the main signal agent decides and writes.
+Use Copilot's native custom subagent delegation. Delegate one specialist task at a time, wait for that subagent's result, then decide whether another specialist is needed. If a read/wait tool is available for delegated agents, use only the real agent ID returned by the delegation tool; never invent placeholder agent IDs.
 
 ## What to record
 

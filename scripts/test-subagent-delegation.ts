@@ -42,7 +42,7 @@ const alphaReader = {
   displayName: "Alpha Reader",
   description: "Inspects only alpha and reports a concise result to the main agent.",
   tools: ["inspect_probe"],
-  infer: false,
+  infer: true,
   prompt: [
     "You are alpha-reader.",
     "Call inspect_probe with key=alpha exactly once.",
@@ -56,7 +56,7 @@ const betaReader = {
   displayName: "Beta Reader",
   description: "Inspects only beta and reports a concise result to the main agent.",
   tools: ["inspect_probe"],
-  infer: false,
+  infer: true,
   prompt: [
     "You are beta-reader.",
     "Call inspect_probe with key=beta exactly once.",
@@ -64,6 +64,8 @@ const betaReader = {
     "Do not call submit_probe_result."
   ].join(" ")
 };
+
+const allowedTaskAgents = new Set([alphaReader.name, betaReader.name]);
 
 const inspectProbe = defineTool("inspect_probe", {
   description: "Subagent-only inspection tool. Use this to inspect probe facts by key.",
@@ -153,7 +155,8 @@ try {
       {
         model: providerOptions.model,
         includeSubAgentStreamingEvents: providerOptions.sessionConfig.includeSubAgentStreamingEvents,
-        providerMode: providerOptions.sessionConfig.provider?.type ?? "copilot"
+        providerMode: providerOptions.sessionConfig.provider?.type ?? "copilot",
+        availableTools: process.env.DREAM_SUBAGENT_PROBE_AVAILABLE_TOOLS ?? null
       },
       null,
       2
@@ -172,10 +175,32 @@ try {
     configDir: providerOptions.sessionConfig.configDir,
     workingDirectory: providerOptions.sessionConfig.workingDirectory,
     onPermissionRequest: approveAll,
+    hooks: {
+      onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => {
+        if (input.toolName !== "task") return undefined;
+        const args = input.toolArgs as Record<string, unknown> | undefined;
+        const agentType = typeof args?.agent_type === "string" ? args.agent_type : "";
+        if (allowedTaskAgents.has(agentType)) return undefined;
+        return {
+          permissionDecision: "deny" as const,
+          permissionDecisionReason: "Only configured probe custom agents may be used.",
+          additionalContext: `Use one of these agent_type values: ${[...allowedTaskAgents].join(", ")}.`
+        };
+      }
+    },
     onEvent: (event) => {
       events.push(event);
       const agentName = eventAgentName(event);
       const type = (event as { type?: unknown }).type;
+      if ((String(type) === "subagent.selected" || String(type) === "subagent.started") && agentName) currentPass = agentName;
+      if (String(type) === "subagent.deselected" || String(type) === "subagent.completed") currentPass = "main";
+      if (String(type) === "tool.execution_start") {
+        const data = ((event as { data?: Record<string, unknown> }).data ?? {}) as Record<string, unknown>;
+        const toolName = String(data.toolName ?? "unknown");
+        const args = data.arguments as Record<string, unknown> | undefined;
+        const suffix = toolName === "task" ? ` agent_type=${String(args?.agent_type ?? "unknown")}` : "";
+        ttyWriteTagged("probe:event", `${String(type)} tool=${toolName}${suffix}`);
+      }
       if (agentName || String(type).includes("subagent")) {
         ttyWriteTagged("probe:event", `${String(type)} agent=${agentName ?? "unknown"}`);
       }
@@ -183,52 +208,33 @@ try {
   } satisfies Omit<Parameters<typeof client.createSession>[0], "agent" | "customAgents" | "tools" | "defaultAgent">;
 
   const timeoutMs = Number(process.env.DREAM_SUBAGENT_PROBE_TIMEOUT_MS ?? 120_000);
-  const alphaSession = (await client.createSession({
+  const session = (await client.createSession({
     ...commonSessionOptions,
-    agent: "alpha-reader",
-    customAgents: [alphaReader],
-    tools: [inspectProbe]
-  })) as { sendAndWait: (req: { prompt: string }, timeout?: number) => Promise<unknown> };
-  currentPass = "alpha-reader";
-  const alphaResponse = await alphaSession.sendAndWait(
-    { prompt: "Call inspect_probe with key=alpha exactly once, then summarize the result." },
-    timeoutMs
-  );
-
-  const betaSession = (await client.createSession({
-    ...commonSessionOptions,
-    agent: "beta-reader",
-    customAgents: [betaReader],
-    tools: [inspectProbe]
-  })) as { sendAndWait: (req: { prompt: string }, timeout?: number) => Promise<unknown> };
-  currentPass = "beta-reader";
-  const betaResponse = await betaSession.sendAndWait(
-    { prompt: "Call inspect_probe with key=beta exactly once, then summarize the result." },
-    timeoutMs
-  );
-
-  const mainSession = (await client.createSession({
-    ...commonSessionOptions,
-    customAgents: undefined,
+    availableTools: process.env.DREAM_SUBAGENT_PROBE_AVAILABLE_TOOLS
+      ? process.env.DREAM_SUBAGENT_PROBE_AVAILABLE_TOOLS.split(",").map((tool) => tool.trim()).filter(Boolean)
+      : undefined,
+    customAgents: [alphaReader, betaReader],
     defaultAgent: {
       excludedTools: ["inspect_probe", "bash", "read_bash", "view", "read_file", "grep_search", "file_search", "list_dir"]
     },
-    tools: [submitProbeResult]
+    tools: [inspectProbe, submitProbeResult]
   })) as { sendAndWait: (req: { prompt: string }, timeout?: number) => Promise<unknown> };
   currentPass = "main";
-  await mainSession.sendAndWait(
+  const response = await session.sendAndWait(
     {
       prompt: [
-        "This is an isolated deterministic delegation contract test.",
-        "You are the main agent. You have only submit_probe_result available.",
-        "Do not inspect facts directly.",
-        `Alpha summary: ${JSON.stringify(alphaResponse)}`,
-        `Beta summary: ${JSON.stringify(betaResponse)}`,
-        "Call submit_probe_result exactly once with sawAlpha=true and sawBeta=true now. After the tool returns, stop with no more tool calls. Do not finish with text only."
+        "This is an isolated native Copilot subagent delegation contract test.",
+        "You are the main agent. Do not call inspect_probe directly.",
+        "Delegate alpha inspection to alpha-reader using the native custom subagent feature. Wait for its result.",
+        "Then delegate beta inspection to beta-reader using the native custom subagent feature. Wait for its result.",
+        "If a read/wait tool is available for delegated agents, use only the real agent ID returned by the delegation tool. Never invent placeholder agent IDs.",
+        "After both specialist summaries return, call submit_probe_result exactly once with sawAlpha=true and sawBeta=true.",
+        "After the tool returns, stop with no more tool calls. Do not finish with text only."
       ].join("\n")
     },
     timeoutMs
   );
+  ttyWriteTagged("probe", `response ${JSON.stringify(response)}`);
 
   const result = printSummary();
   if (!result.passed) {
