@@ -4,17 +4,22 @@
     {
       "id": "signal_extraction",
       "description": "Important signals from the transcript (corrections, decisions, failures, preferences) were correctly identified and extracted into memories.",
-      "weight": 0.30
+      "weight": 0.25
     },
     {
       "id": "memory_quality",
       "description": "Extracted memories are precise, durable, and free from noise or filler. No hallucinated or contradictory entries.",
-      "weight": 0.25
+      "weight": 0.20
+    },
+    {
+      "id": "interaction_guidance",
+      "description": "User communication and collaboration preferences are captured as concrete, contextual guidance, including preferred formats, pushback expectations, clarification expectations, and examples when provided.",
+      "weight": 0.15
     },
     {
       "id": "coverage",
       "description": "All significant themes and events from the transcript are reflected in the dream outputs. No major omissions.",
-      "weight": 0.20
+      "weight": 0.15
     },
     {
       "id": "coherence",

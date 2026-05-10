@@ -1,6 +1,10 @@
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ConsolidationStage } from "../../src/stages/consolidation-stage.js";
 import { buildContext } from "../../src/dream/build-context.js";
+import { createConsolidationTools } from "../../src/stages/consolidation-stage-tools.js";
 
 const stubProvider = {
   id: "provider.stub",
@@ -24,7 +28,7 @@ describe("ConsolidationStage", () => {
           confidence: 0.9,
           horizon: "long_term",
           reason: "Repeated user correction showed this is a durable engineering practice.",
-          references: [{ kind: "session", value: "session-1" }]
+          references: [{ kind: "file", value: "docs/prd.md" }]
         });
         writeTool?.handler({
           statement: "Use fast failing tests before refactors",
@@ -32,7 +36,7 @@ describe("ConsolidationStage", () => {
           confidence: 0.9,
           horizon: "long_term",
           reason: "Repeated user correction showed this is a durable engineering practice.",
-          references: [{ kind: "session", value: "session-1" }]
+          references: [{ kind: "file", value: "docs/prd.md" }]
         });
         writeCount++;
         return "";
@@ -71,5 +75,67 @@ describe("ConsolidationStage", () => {
       "Use explicit rollback plans for risky migrations"
     ]);
   });
-});
 
+  it("lets consolidation validate cited workspace and session references", async () => {
+    const workspaceDir = join(tmpdir(), `dreamer-consolidation-${Date.now()}`);
+    const runDir = join(workspaceDir, ".dreamer-run");
+    await mkdir(join(runDir, "sessions"), { recursive: true });
+    await writeFile(join(workspaceDir, "AGENTS.md"), "Use pnpm for this repo.\n", "utf8");
+    await writeFile(join(runDir, "sessions", "session-1.md"), "[1] **user**\nPrefer pnpm.\n", "utf8");
+
+    try {
+      const { tools } = createConsolidationTools([], "2026-05-10T00:00:00.000Z", [], "run-test", workspaceDir, runDir);
+      const readReference = tools.find((tool) => tool.name === "read_reference") as
+        | { handler: (args: Record<string, unknown>) => Promise<{ textResultForLlm: string; resultType: string }> }
+        | undefined;
+
+      const fileResult = await readReference?.handler({ kind: "file", value: "AGENTS.md" });
+      const sessionResult = await readReference?.handler({ kind: "session", value: "session-1" });
+      const runResult = await readReference?.handler({ kind: "doc", value: "dream-run:run-test" });
+      const blocked = await readReference?.handler({ kind: "file", value: "/etc/passwd" });
+
+      expect(fileResult?.textResultForLlm).toContain("Use pnpm");
+      expect(sessionResult?.textResultForLlm).toContain("Prefer pnpm");
+      expect(runResult?.resultType).toBe("success");
+      expect(blocked?.resultType).toBe("error");
+    } finally {
+      await rm(workspaceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects write_memory references that do not exist", async () => {
+    const workspaceDir = join(tmpdir(), `dreamer-consolidation-write-${Date.now()}`);
+    const runDir = join(workspaceDir, ".dreamer-run");
+    await mkdir(join(runDir, "sessions"), { recursive: true });
+    await writeFile(join(workspaceDir, "AGENTS.md"), "Use pnpm for this repo.\n", "utf8");
+    await writeFile(join(runDir, "sessions", "session-1.md"), "[1] **user**\nPrefer pnpm.\n", "utf8");
+
+    try {
+      const { tools } = createConsolidationTools([], "2026-05-10T00:00:00.000Z", [], "run-test", workspaceDir, runDir);
+      const writeMemory = tools.find((tool) => tool.name === "write_memory") as
+        | { handler: (args: Record<string, unknown>) => { textResultForLlm: string; resultType: string } }
+        | undefined;
+
+      const missingRef = writeMemory?.handler({
+        statement: "Use explicit rollback plans for risky migrations",
+        scope: "workspace",
+        horizon: "long_term",
+        reason: "This is a validated durable engineering preference.",
+        references: [{ kind: "file", value: "DOES_NOT_EXIST.md" }]
+      });
+      const existingRef = writeMemory?.handler({
+        statement: "Prefer pnpm for this repository",
+        scope: "workspace",
+        horizon: "long_term",
+        reason: "This preference is explicit and stable across sessions.",
+        references: [{ kind: "session", value: "1" }]
+      });
+
+      expect(missingRef?.resultType).toBe("error");
+      expect(missingRef?.textResultForLlm).toContain("Reference target not found");
+      expect(existingRef?.resultType).toBe("success");
+    } finally {
+      await rm(workspaceDir, { recursive: true, force: true });
+    }
+  });
+});

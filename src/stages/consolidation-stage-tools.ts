@@ -1,8 +1,16 @@
 import { defineTool } from "@github/copilot-sdk";
-import type { MemoryRecord } from "../core/types.js";
+import type { InsightRecord, MemoryRecord } from "../core/types.js";
 import { createWriteMemoryTool } from "./consolidation-write-memory-tool.js";
+import { createReadReferenceTool } from "./consolidation-reference-tool.js";
 
-export function createConsolidationTools(memories: MemoryRecord[], nowIso: string) {
+export function createConsolidationTools(
+  memories: MemoryRecord[],
+  nowIso: string,
+  insights: InsightRecord[],
+  runId: string,
+  workspaceDir: string,
+  runDir: string
+) {
   const added: MemoryRecord[] = [];
   let updated = 0;
   const removedIds = new Set<string>();
@@ -25,15 +33,29 @@ export function createConsolidationTools(memories: MemoryRecord[], nowIso: strin
           expiresAt: m.capture?.expiresAt,
           reason: m.capture?.reason,
           references: m.capture?.references
+            ?? m.context?.references?.map((value) => {
+              const [kind, ...rest] = value.split(":");
+              return { kind, value: rest.join(":") };
+            }),
+          rationale: m.context?.rationale,
+          appliesWhen: m.context?.appliesWhen,
+          evidence: m.evidence,
+          provenance: m.provenance
         }))),
         resultType: "success" as const
       };
     }
   });
 
+  const readReferenceTool = createReadReferenceTool({ workspaceDir, runDir });
+
   const writeMemoryTool = createWriteMemoryTool({
     memories,
     nowIso,
+    insights,
+    runId,
+    workspaceDir,
+    runDir,
     onAdded: (record) => added.push(record),
     onUpdated: () => {
       updated++;
@@ -49,7 +71,8 @@ export function createConsolidationTools(memories: MemoryRecord[], nowIso: strin
     },
     skipPermission: true,
     handler: (args) => {
-      const id = String(args.id ?? "");
+      const input = args as Record<string, unknown>;
+      const id = String(input.id ?? "");
       const exists = memories.some((m) => m.id === id);
       if (!exists) return { textResultForLlm: "Memory not found.", resultType: "error" as const };
       removedIds.add(id);
@@ -64,5 +87,5 @@ export function createConsolidationTools(memories: MemoryRecord[], nowIso: strin
     ctx.metrics.contradictionsFound += removedIds.size;
   }
 
-  return { tools: [listMemoriesTool, writeMemoryTool, removeMemoryTool], applyChanges };
+  return { tools: [listMemoriesTool, readReferenceTool, writeMemoryTool, removeMemoryTool], applyChanges };
 }

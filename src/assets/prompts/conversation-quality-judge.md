@@ -15,6 +15,8 @@ Evaluation instructions:
 2. Read the conversation transcript to identify signals that SHOULD have been extracted:
    - User corrections ("no, not like that", "I said X not Y", pushback, repeated asks)
    - Explicit preferences ("I prefer X", "always use Y", "never do Z")
+   - Communication preferences (concise style, example format, desired level of detail)
+   - Collaboration preferences (when to push back, when to ask clarifying questions, when to proceed)
    - Key decisions ("we decided to use X", "we're going with Y approach")
    - Cross-project user patterns (things that would apply in any repo → scope=user)
    - Workspace-specific patterns (things specific to this repo → scope=workspace)
@@ -25,6 +27,7 @@ Scoring guidance:
 - signal_capture: 1.0 = all important signals captured, 0.0 = nothing extracted from a rich conversation
 - memory_scoping: 1.0 = all scopes correct, 0.0 = everything in workspace when user preferences exist, or vice versa
 - insight_precision: 1.0 = all statements are tight declarative insights, 0.0 = verbose/copied transcript fragments
+- interaction_guidance: 1.0 = communication/collaboration preferences are concrete, contextual, and example-backed; 0.0 = clear interaction preferences were missed or stored as vague/overbroad rules
 - coverage: 1.0 = no important gaps, 0.0 = major patterns completely missing
 
 If the memory output is empty but the conversation has clear extractable signals, this is a pipeline failure — score signal_capture and coverage near 0.

@@ -123,4 +123,42 @@ describe("SignalStage delegated mode", () => {
     expect(provider.calls[0]?.prompt).toContain("session-1.md");
     expect(provider.calls[1]?.prompt).toContain("session-1.md");
   });
+
+  it("loads packaged signal agent prompts when workspace templates are absent", async () => {
+    const workspaceDir = mkdtempSync(join(tmpdir(), "dreamer-signal-stage-"));
+    tempDirs.push(workspaceDir);
+
+    const pack: RuntimeStageAgentPackConfig = {
+      defaultAgent: { excludedTools: ["record_insight"] },
+      customAgents: [
+        {
+          name: "behavior-analyst",
+          tools: ["read_file", "get_message_details"],
+          promptTemplatePath: "prompts/stages/signal/agents/behavior-analyst.md",
+          infer: true
+        },
+        {
+          name: "insight-recorder",
+          tools: ["record_insight"],
+          promptTemplatePath: "prompts/stages/signal/agents/insight-recorder.md",
+          infer: false
+        }
+      ],
+      execution: { mode: "inferred" }
+    };
+
+    const provider = new MockProvider();
+    const stage = new SignalStage(provider, pack);
+    const context = buildContext(workspaceDir, "run-1");
+    context.events = createEvents();
+
+    await stage.run(context);
+
+    expect(provider.calls).toHaveLength(1);
+    expect(provider.calls[0]?.options.selectedAgent).toBeUndefined();
+    expect(provider.calls[0]?.options.defaultAgent).toEqual({ excludedTools: ["record_insight"] });
+    expect(provider.calls[0]?.options.customAgents?.[0]?.prompt).toContain("behavior analyst");
+    expect(provider.calls[0]?.options.customAgents?.[0]?.prompt).toContain("communication");
+    expect(provider.calls[0]?.options.customAgents?.[1]?.prompt).toContain("record_insight");
+  });
 });

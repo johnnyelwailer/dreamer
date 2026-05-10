@@ -21,7 +21,11 @@ async function loadTemplate(workspaceDir: string, templatePath: string, fallback
   try {
     return await readFile(absolutePath, "utf8");
   } catch {
-    return fallback;
+    try {
+      return await readFile(resolveAssetPath(templatePath), "utf8");
+    } catch {
+      return fallback;
+    }
   }
 }
 

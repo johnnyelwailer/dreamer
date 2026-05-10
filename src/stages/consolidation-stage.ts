@@ -66,7 +66,14 @@ export class ConsolidationStage implements PipelineStage {
 
     const runDir = join(workspaceStorageDir(context.workspaceDir), "runs", context.runId);
     const orientationPath = join(runDir, "orientation.md");
-    const { tools, applyChanges } = createConsolidationTools(context.memories, context.nowIso);
+    const { tools, applyChanges } = createConsolidationTools(
+      context.memories,
+      context.nowIso,
+      context.insights,
+      context.runId,
+      context.workspaceDir,
+      runDir
+    );
     const prompt = await loadPrompt(context.insights, orientationPath);
 
     try {

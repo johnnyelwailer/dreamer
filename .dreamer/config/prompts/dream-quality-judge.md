@@ -7,6 +7,11 @@ Use the evidence tools to:
 2. Read the memory output files (what the dreamer produced)
 3. Compare them: did the dreamer extract the right things?
 
+Pay special attention to interaction guidance:
+- Communication preferences such as concise style, preferred explanation format, and example patterns
+- Collaboration preferences such as when the user wants pushback or clarifying questions
+- Whether broad wording like "always" or "never" was normalized into usable context-aware guidance when appropriate
+
 Then call submit_quality_scores with your evaluation.
 
 Rules:

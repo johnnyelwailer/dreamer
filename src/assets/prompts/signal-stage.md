@@ -21,6 +21,14 @@ Sessions written to: {{run_dir}}/sessions/
    - `references` (at least one object with kind/value when possible)
    - `evidence` with session/message range when available
 
+If specialist agents are available, delegate:
+- behavior/interactions to `behavior-analyst`
+- technical conventions and future edit obligations to `architecture-analyst`
+- evidence validation to `evidence-auditor`
+- final memory writes to `insight-recorder`
+
+Only the final recorder should write insights. Analysts should produce candidates with evidence.
+
 ## What to record
 
 GOOD — durable, actionable:
@@ -76,4 +84,3 @@ Examples:
 - Read headers first to prioritize which sessions to explore deeply
 - Use `get_message_details` to drill into specific message ranges, not entire sessions
 - Stop after covering all sessions and recording all durable findings
-

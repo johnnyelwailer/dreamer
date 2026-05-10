@@ -1,10 +1,16 @@
 import { defineTool } from "@github/copilot-sdk";
-import { MEMORY_CATEGORIES, type MemoryRecord } from "../core/types.js";
+import { MEMORY_CATEGORIES, type InsightRecord, type MemoryRecord } from "../core/types.js";
 import { EVIDENCE_ITEM_SCHEMA, REFERENCE_ITEM_SCHEMA, normalizeEvidence, normalizeReferences, normalizeTags, parseCategory, parseHorizon } from "./memory-tool-shared.js";
+import { inferEvidenceAndReferences } from "./consolidation-memory-metadata.js";
+import { validateReferencesStrict } from "./consolidation-reference-validation.js";
 
 type CreateWriteMemoryToolOptions = {
   memories: MemoryRecord[];
   nowIso: string;
+  insights: InsightRecord[];
+  runId: string;
+  workspaceDir: string;
+  runDir: string;
   onAdded: (record: MemoryRecord) => void;
   onUpdated: () => void;
 };
@@ -29,36 +35,49 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
         horizon: { type: "string", enum: ["short_term", "long_term"] },
         expires_at: { type: "string" },
         reason: { type: "string" },
-        references: { type: "array", minItems: 1, items: REFERENCE_ITEM_SCHEMA },
+        references: { type: "array", items: REFERENCE_ITEM_SCHEMA },
         evidence: { type: "array", items: EVIDENCE_ITEM_SCHEMA }
       },
       required: ["statement", "scope", "reason", "references", "horizon"]
     },
     skipPermission: true,
     handler: (args) => {
-      const statement = String(args.statement ?? "").trim();
-      const scope = args.scope === "user" ? "user" : ("workspace" as const);
-      const confidence = Math.min(1, Math.max(0, Number(args.confidence) || 0.85));
+      const input = args as Record<string, unknown>;
+      const statement = String(input.statement ?? "").trim();
+      const scope = input.scope === "user" ? "user" : ("workspace" as const);
+      const confidence = Math.min(1, Math.max(0, Number(input.confidence) || 0.85));
       if (statement.length < 10) return { textResultForLlm: "Statement too short.", resultType: "error" as const };
 
-      const horizon = parseHorizon(args.horizon);
+      const horizon = parseHorizon(input.horizon);
       if (!horizon) return { textResultForLlm: "Missing required horizon.", resultType: "error" as const };
-      const expiresAt = String(args.expires_at ?? "").trim().slice(0, 40);
+      const expiresAt = String(input.expires_at ?? "").trim().slice(0, 40);
       if (horizon === "short_term" && expiresAt.length < 10) {
         return { textResultForLlm: "Short-term memories require expires_at.", resultType: "error" as const };
       }
 
-      const reason = String(args.reason ?? "").trim().slice(0, 240);
+      const reason = String(input.reason ?? "").trim().slice(0, 240);
       if (reason.length < 12) return { textResultForLlm: "reason must be meaningful.", resultType: "error" as const };
 
-      const references = normalizeReferences(args.references);
-      if (!references?.length) return { textResultForLlm: "At least one valid reference is required.", resultType: "error" as const };
+      const references = normalizeReferences(input.references) ?? [];
+      const referenceValidation = validateReferencesStrict(references, {
+        workspaceDir: options.workspaceDir,
+        runDir: options.runDir
+      });
+      if (!referenceValidation.ok) {
+        return { textResultForLlm: referenceValidation.message, resultType: "error" as const };
+      }
 
-      const category = parseCategory(args.category);
-      const tags = normalizeTags(args.tags);
-      const rationale = String(args.rationale ?? "").trim().slice(0, 240);
-      const appliesWhen = String(args.applies_when ?? "").trim().slice(0, 180);
-      const evidence = normalizeEvidence(args.evidence);
+      const category = parseCategory(input.category);
+      const tags = normalizeTags(input.tags);
+      const rationale = String(input.rationale ?? "").trim().slice(0, 240);
+      const appliesWhen = String(input.applies_when ?? "").trim().slice(0, 180);
+      const rawEvidence = normalizeEvidence(input.evidence);
+      const derived = inferEvidenceAndReferences(statement, rawEvidence, references, {
+        insights: options.insights,
+        runId: options.runId
+      });
+      const evidence = derived.evidence;
+      const mergedReferences = derived.references;
 
       const existing = options.memories.find((m) => m.statement === statement && m.scope === scope);
       if (existing) {
@@ -69,11 +88,16 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
           retention: horizon,
           expiresAt: horizon === "short_term" ? expiresAt : undefined,
           rationale: rationale || existing.context?.rationale,
-          references: references.map((reference) => `${reference.kind}:${reference.value}`),
+          references: mergedReferences.map((reference) => `${reference.kind}:${reference.value}`),
           appliesWhen: appliesWhen || existing.context?.appliesWhen
         };
-        existing.capture = { horizon, expiresAt: horizon === "short_term" ? expiresAt : undefined, reason, references };
-        if (evidence?.length) existing.evidence = evidence;
+        existing.capture = { horizon, expiresAt: horizon === "short_term" ? expiresAt : undefined, reason, references: mergedReferences };
+        existing.evidence = evidence;
+        existing.provenance = {
+          ...existing.provenance,
+          eventIds: derived.sessionIds.length ? derived.sessionIds.map((sessionId) => `session:${sessionId}`) : [`run:${options.runId}`],
+          capturedAt: options.nowIso
+        };
         options.onUpdated();
         return { textResultForLlm: "Memory reinforced.", resultType: "success" as const };
       }
@@ -83,18 +107,22 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
         scope,
         statement,
         confidence,
-        provenance: { source: "dream-run-agent", eventIds: [], capturedAt: options.nowIso },
+        provenance: {
+          source: "dream-run-agent",
+          eventIds: derived.sessionIds.length ? derived.sessionIds.map((sessionId) => `session:${sessionId}`) : [`run:${options.runId}`],
+          capturedAt: options.nowIso
+        },
         context: {
           category,
           tags,
           retention: horizon,
           expiresAt: horizon === "short_term" ? expiresAt : undefined,
           rationale: rationale || reason,
-          references: references.map((reference) => `${reference.kind}:${reference.value}`),
+          references: mergedReferences.map((reference) => `${reference.kind}:${reference.value}`),
           appliesWhen: appliesWhen || undefined
         },
         evidence,
-        capture: { horizon, expiresAt: horizon === "short_term" ? expiresAt : undefined, reason, references }
+        capture: { horizon, expiresAt: horizon === "short_term" ? expiresAt : undefined, reason, references: mergedReferences }
       };
       options.memories.push(record);
       options.onAdded(record);

@@ -11,6 +11,7 @@ export type NormalizedEvent = {
 
 export const MEMORY_CATEGORIES = [
   "preferences",
+  "communication",
   "workflow",
   "tooling",
   "architecture",

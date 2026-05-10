@@ -271,8 +271,8 @@ Example:
 ```text
 statement: User prefers examples framed as explicit state transitions when discussing behavior.
 scope: user
-category: preferences
-tags: communication, examples
+category: communication
+tags: examples
 applies_when: Explaining requirements, bugs, acceptance criteria, or UI behavior.
 rationale: The user asked for examples such as "Given State A and A.y, click button X, A.y becomes ACCEPTED instead of IN PROGRESS."
 ```
