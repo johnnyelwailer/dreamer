@@ -2,7 +2,10 @@ import { defineTool } from "@github/copilot-sdk";
 import { MEMORY_CATEGORIES, type InsightRecord } from "../core/types.js";
 import { EVIDENCE_ITEM_SCHEMA, REFERENCE_ITEM_SCHEMA, normalizeEvidence, normalizeReferences, normalizeTags, parseCategory, parseHorizon } from "./memory-tool-shared.js";
 
-export function createRecordInsightTool(onInsight: (insight: InsightRecord) => void, sessionHint?: { sessionId?: string }) {
+export function createRecordInsightTool(
+  onInsight: (insight: InsightRecord) => void,
+  sessionHint?: { sessionId?: string; sessionReference?: string }
+) {
   return defineTool("record_insight", {
     description: "Record a durable, actionable insight with required references and evidence tied to the analyzed session.",
     parameters: {
@@ -27,7 +30,10 @@ export function createRecordInsightTool(onInsight: (insight: InsightRecord) => v
       const statement = String(args.statement ?? "").trim().slice(0, 200);
       if (statement.length < 10) return { textResultForLlm: "Too short.", resultType: "error" as const };
       const references = normalizeReferences(args.references) ?? [];
-      if (sessionHint?.sessionId && !references.some((reference) => reference.kind === "session")) references.unshift({ kind: "session", value: sessionHint.sessionId, note: "Captured from analyzed session" });
+      const autoSessionReference = sessionHint?.sessionReference ?? sessionHint?.sessionId;
+      if (autoSessionReference && !references.some((reference) => reference.kind === "session")) {
+        references.unshift({ kind: "session", value: autoSessionReference, note: "Captured from analyzed session" });
+      }
       if (references.length === 0) return { textResultForLlm: "record_insight requires at least one reference (prefer kind=session).", resultType: "error" as const };
       const evidence = normalizeEvidence(args.evidence) ?? [];
       if (!evidence.length && sessionHint?.sessionId) evidence.push({ sessionId: sessionHint.sessionId });

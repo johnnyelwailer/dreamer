@@ -124,11 +124,15 @@ describe("ConsolidationStage", () => {
 
       const fileResult = await readReference?.handler({ kind: "file", value: "AGENTS.md" });
       const sessionResult = await readReference?.handler({ kind: "session", value: "session-1" });
+      const runScopedSessionResult = await readReference?.handler({ kind: "session", value: "run-test/session-1.md" });
+      const idSessionResult = await readReference?.handler({ kind: "session", value: "unknown-1234-abcd" });
       const runResult = await readReference?.handler({ kind: "doc", value: "dream-run:run-test" });
       const blocked = await readReference?.handler({ kind: "file", value: "/etc/passwd" });
 
       expect(fileResult?.textResultForLlm).toContain("Use pnpm");
       expect(sessionResult?.textResultForLlm).toContain("Prefer pnpm");
+      expect(runScopedSessionResult?.textResultForLlm).toContain("Prefer pnpm");
+      expect(idSessionResult?.resultType).toBe("error");
       expect(runResult?.resultType).toBe("success");
       expect(blocked?.resultType).toBe("error");
     } finally {
@@ -167,6 +171,40 @@ describe("ConsolidationStage", () => {
       expect(missingRef?.resultType).toBe("error");
       expect(missingRef?.textResultForLlm).toContain("Reference target not found");
       expect(existingRef?.resultType).toBe("success");
+    } finally {
+      await rm(workspaceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts write_memory session references using run-scoped paths and session ids", async () => {
+    const workspaceDir = join(tmpdir(), `dreamer-consolidation-write-session-ref-${Date.now()}`);
+    const runDir = join(workspaceDir, ".dreamer-run");
+    await mkdir(join(runDir, "sessions"), { recursive: true });
+    await writeFile(join(runDir, "sessions", "session-1.md"), "# Session 1\nSource: copilot-debug | ID: 0084540e\n\n[1] **user**\nPrefer pnpm.\n", "utf8");
+
+    try {
+      const { tools } = createConsolidationTools([], "2026-05-10T00:00:00.000Z", [], "run-test", workspaceDir, runDir);
+      const writeMemory = tools.find((tool) => tool.name === "write_memory") as
+        | { handler: (args: Record<string, unknown>) => { textResultForLlm: string; resultType: string } }
+        | undefined;
+
+      const runScopedRef = writeMemory?.handler({
+        statement: "Prefer pnpm for this repository",
+        scope: "workspace",
+        horizon: "long_term",
+        reason: "This preference is explicit and stable across sessions.",
+        references: [{ kind: "session", value: "run-test/session-1.md" }]
+      });
+      const idRef = writeMemory?.handler({
+        statement: "Keep concise status updates during execution",
+        scope: "user",
+        horizon: "long_term",
+        reason: "The user repeatedly prefers concise progress updates.",
+        references: [{ kind: "session", value: "0084540e-e033-453e-8df3-f0bc5ecc0451" }]
+      });
+
+      expect(runScopedRef?.resultType).toBe("success");
+      expect(idRef?.resultType).toBe("success");
     } finally {
       await rm(workspaceDir, { recursive: true, force: true });
     }

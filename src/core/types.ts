@@ -68,7 +68,16 @@ export type MemoryRecord = {
   scope: "user" | "workspace" | "session";
   statement: string;
   confidence: number;
-  provenance: { source: string; eventIds: string[]; capturedAt: string };
+  provenance: {
+    source: string;
+    eventIds: string[];
+    capturedAt: string;
+    workspaceId?: string;
+    workspaceDir?: string;
+    repoRemoteUrl?: string;
+    repoBranch?: string;
+    repoCommit?: string;
+  };
   contradictoryTo?: string;
   context?: MemoryContext;
   evidence?: MemoryEvidence[];

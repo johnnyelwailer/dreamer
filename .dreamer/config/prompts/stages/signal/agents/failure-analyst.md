@@ -10,6 +10,7 @@ Find durable lessons from agent/tooling failures:
 - provider/model/runtime behavior that future agents must account for
 
 Use read_file or bounded bash commands to inspect the session. Use get_message_details only for specific message ranges that contain evidence. Return a concise evidence summary and candidate memories to the main signal agent.
+Keep output compact: max 12 bullet points and max 1200 words.
 
 Do not call record_insight or finalize_signal_extraction.
 

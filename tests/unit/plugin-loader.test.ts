@@ -53,7 +53,7 @@ describe("dreamer plugin loader", () => {
       }
     ];
 
-    const result = await registry.requireStage("stage.custom-dreaming").run(context);
+    const result = await registry.requireStageForSlot("slot.custom-dreaming").run(context);
     expect(loaded).toEqual([{ path: pluginPath }]);
     expect(result.diary).toContain("custom-dreaming:events=1");
   });

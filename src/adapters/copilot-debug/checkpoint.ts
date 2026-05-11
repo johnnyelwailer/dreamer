@@ -2,7 +2,8 @@ import type {
   CopilotCompletion,
   CopilotDebugCheckpoint,
   CopilotSessionCheckpoint,
-  CopilotDiscoveredSession
+  CopilotDiscoveredSession,
+  CopilotSessionScopeMode
 } from "./types.js";
 
 export function parseCheckpoint(value: unknown): CopilotDebugCheckpoint {
@@ -25,8 +26,36 @@ export function parseCheckpoint(value: unknown): CopilotDebugCheckpoint {
 
 export function prioritizeSessions(
   discovered: CopilotDiscoveredSession[],
-  sessions: Record<string, CopilotSessionCheckpoint>
+  sessions: Record<string, CopilotSessionCheckpoint>,
+  mode: CopilotSessionScopeMode = "newest-first"
 ): CopilotDiscoveredSession[] {
+  const isUpToDate = (session: CopilotDiscoveredSession): boolean => {
+    const state = sessions[session.path];
+    if (!state?.lastProcessedAt) return false;
+    return (
+      (state.lastObservedActivityMs ?? 0) >= session.activityMs &&
+      (state.lastObservedTranscriptLineCount ?? 0) >= session.transcriptLineCount
+    );
+  };
+
+  const freshnessRank = (session: CopilotDiscoveredSession): number => (isUpToDate(session) ? 1 : 0);
+
+  if (mode === "newest-first") {
+    return [...discovered].sort((left, right) => {
+      const freshness = freshnessRank(left) - freshnessRank(right);
+      if (freshness !== 0) return freshness;
+      return right.activityMs - left.activityMs || right.richnessScore - left.richnessScore;
+    });
+  }
+
+  if (mode === "oldest-first") {
+    return [...discovered].sort((left, right) => {
+      const freshness = freshnessRank(left) - freshnessRank(right);
+      if (freshness !== 0) return freshness;
+      return left.activityMs - right.activityMs || right.richnessScore - left.richnessScore;
+    });
+  }
+
   return [...discovered].sort((left, right) => {
     const leftProcessed = sessions[left.path]?.lastProcessedAt ? Date.parse(sessions[left.path].lastProcessedAt ?? "") : Number.NaN;
     const rightProcessed = sessions[right.path]?.lastProcessedAt ? Date.parse(sessions[right.path].lastProcessedAt ?? "") : Number.NaN;

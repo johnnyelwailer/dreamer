@@ -15,7 +15,8 @@ export function createAdapter(config: DreamConfig): TranscriptAdapter {
         discoveryMode: config.copilotDebugDiscoveryMode,
         searchPaths: config.copilotDebugSearchPaths,
         lookbackDays: config.copilotDebugLookbackDays,
-        maxSessionsPerRun: config.copilotDebugMaxSessionsPerRun
+        maxSessionsPerRun: config.copilotDebugMaxSessionsPerRun,
+        sessionScopeMode: config.copilotDebugSessionScopeMode
       });
     case "adapter.jsonl.events":
       return new JsonlEventAdapter(config.jsonlEventsPath);

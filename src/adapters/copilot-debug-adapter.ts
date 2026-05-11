@@ -12,7 +12,11 @@ import {
   prioritizeSessions
 } from "./copilot-debug/checkpoint.js";
 import { ingestCopilotSession } from "./copilot-debug/session-ingest.js";
-import type { CopilotDebugAdapterOptions, CopilotDebugCheckpoint } from "./copilot-debug/types.js";
+import type {
+  CopilotDebugAdapterOptions,
+  CopilotDebugCheckpoint,
+  CopilotSessionScopeMode
+} from "./copilot-debug/types.js";
 import { ttyWriteTagged } from "../shared/tty-log-format.js";
 import { buildProgress, computeAverageMs, emptyProgress } from "./copilot-debug/progress.js";
 
@@ -34,19 +38,29 @@ export class CopilotDebugAdapter implements TranscriptAdapter {
       ttyWriteTagged("dream", "ingest: no Copilot debug sessions discovered", { noisy: true });
       return { events: [], checkpoint: parsed, progress: emptyProgress() };
     }
-    const prioritized = prioritizeSessions(discovered, parsed.sessions);
+    const sessionScopeMode = this.readSessionScopeMode();
+    const prioritized = prioritizeSessions(discovered, parsed.sessions, sessionScopeMode);
     const maxSessions = this.readMaxSessionsPerRun();
     const selected = maxSessions ? prioritized.slice(0, maxSessions) : prioritized;
-    ttyWriteTagged("dream", `ingest: ${selected.length}/${discovered.length} sessions selected`, { noisy: true });
+    ttyWriteTagged(
+      "dream",
+      `ingest: ${selected.length}/${discovered.length} sessions selected scope=${sessionScopeMode} maxPerRun=${maxSessions ?? "all"}`,
+      { noisy: true }
+    );
     const nowIso = new Date().toISOString();
     const nextSessions = { ...parsed.sessions };
     const runEvents: NormalizedEvent[] = [];
     let latestCursor: string | undefined;
     let durationMs = 0;
+    let completion = computeCompletion(discovered, parsed.sessions);
 
     for (const [index, session] of selected.entries()) {
       const startedAt = Date.now();
-      ttyWriteTagged("dream", `ingest: session ${index + 1}/${selected.length} ${session.sessionId}`, { noisy: true });
+      ttyWriteTagged(
+        "dream",
+        `ingest: session ${index + 1}/${selected.length} id=${session.sessionId} overall=${completion.completedUnits}/${discovered.length}`,
+        { noisy: true }
+      );
       const fallbackState = parsed.legacyCursor ? { cursor: parsed.legacyCursor } : {};
       const state = parsed.sessions[session.path] ?? fallbackState;
       const ingestResult = await ingestCopilotSession(session, state);
@@ -59,8 +73,13 @@ export class CopilotDebugAdapter implements TranscriptAdapter {
         lastObservedTranscriptLineCount: session.transcriptLineCount,
         totalEventsSeen: (state.totalEventsSeen ?? 0) + ingestResult.events.length
       };
+      completion = computeCompletion(discovered, nextSessions);
       durationMs += Math.max(1, Date.now() - startedAt);
-      ttyWriteTagged("dream", `ingest: done ${session.sessionId} events=${ingestResult.events.length}`, { noisy: true });
+      ttyWriteTagged(
+        "dream",
+        `ingest: done ${session.sessionId} events=${ingestResult.events.length} overall=${completion.completedUnits}/${completion.totalUnits}`,
+        { noisy: true }
+      );
     }
 
     const averageSessionDurationMs = computeAverageMs(parsed, selected.length, durationMs);
@@ -70,7 +89,6 @@ export class CopilotDebugAdapter implements TranscriptAdapter {
       averageSessionDurationMs,
       totalRuns: (parsed.totalRuns ?? 0) + 1
     };
-    const completion = computeCompletion(discovered, nextSessions);
     const progress = buildProgress(completion, selected.length, discovered.length, averageSessionDurationMs);
     runEvents.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     ttyWriteTagged(
@@ -121,5 +139,11 @@ export class CopilotDebugAdapter implements TranscriptAdapter {
   private readMaxSessionsPerRun(): number | undefined {
     const value = this.readOptions().maxSessionsPerRun;
     return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+  }
+
+  private readSessionScopeMode(): CopilotSessionScopeMode {
+    const mode = this.readOptions().sessionScopeMode;
+    if (mode === "newest-first" || mode === "oldest-first" || mode === "coverage") return mode;
+    return "newest-first";
   }
 }

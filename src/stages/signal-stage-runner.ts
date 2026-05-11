@@ -49,6 +49,7 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
   const userTurns = session.events.filter((event) => event.kind === "message" && String(event.metadata.role ?? "") === "user").length;
   if (userTurns === 0) {
     context.diary.push(`signals:skipped_no_user_turns=${sessionFile}`);
+    ttyWriteTagged("dream", `signal skipped ${sessionFile} user_turns=0`);
     return;
   }
 
@@ -59,7 +60,10 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
     runDir,
     writtenSessions,
     (insight) => sessionCaptured.push(insight),
-    { sessionId: String(sessionStart?.metadata.sessionId ?? "").slice(0, 64) || undefined },
+    {
+      sessionId: String(sessionStart?.metadata.sessionId ?? "").slice(0, 64) || undefined,
+      sessionReference: sessionFile.replace(/\.md$/, "")
+    },
     (verdict) => {
       finalVerdict.current = verdict;
     }
@@ -71,6 +75,13 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
     .replace("{{run_dir}}", runDir)
     .replace("{{session_list}}", `  ${sessionFile} (${session.messageCount} messages)`)
     .replace("{{orientation_path}}", orientationPath);
+  const specialistContextPrompt = [
+    `Analyze ${sessionFile} only.`,
+    "Return concise candidate memories for the main stage agent to record.",
+    "Inputs:",
+    `- orientation: ${orientationPath}`,
+    `- session file: ${runDir}/sessions/${sessionFile}`
+  ].join("\n");
   const configuredCustomAgents = await buildSignalCustomAgents(context.workspaceDir, runDir, orientationPath, agentPack);
   const sessionCustomAgents = configuredCustomAgents?.map((agent) => ({
     ...agent,
@@ -90,10 +101,11 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
     await runStageAgentPack({
       provider,
       prompt,
+      specialistContextPrompt,
       tools,
       streamTag,
       retries: [
-        `Continue only on ${sessionFile}. Delegate evidence inspection with the task tool using agent_type explore, behavior-analyst, architecture-analyst, or failure-analyst. Do not call read_agent with guessed IDs. Call record_insight for any remaining durable findings, then call finalize_signal_extraction before finishing.`
+        `Continue only on ${sessionFile}. Call record_insight for any remaining durable findings, then call finalize_signal_extraction before finishing.`
       ],
       shouldRetry: () => !finalVerdict.current,
       customAgents: sessionCustomAgents,
@@ -134,7 +146,7 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
   if (!finalVerdict.current) {
     context.diary.push(`signals:missing_final_verdict=${sessionFile}`);
     context.diary.push(`signals:user_message=Signal extraction must call finalize_signal_extraction to finish ${sessionFile}.`);
-    throw new Error(`signal stage missing required finalize_signal_extraction for ${sessionFile}`);
+    return;
   }
 
   context.diary.push(`signals:final_status:${sessionFile}=${finalVerdict.current.status}`);

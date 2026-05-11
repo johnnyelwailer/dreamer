@@ -76,6 +76,18 @@ pnpm dream
 
 This runs in an isolated git worktree on a dedicated branch by default.
 
+For global/non-repo dreaming (no worktree isolation), use:
+
+```bash
+pnpm dream:honcho
+```
+
+If you want Honcho with repo worktree isolation, use:
+
+```bash
+pnpm dream:honcho:safe
+```
+
 Expected outputs include:
 
 - `docs/generated/*.md`
@@ -141,6 +153,31 @@ pnpm test
 ```
 
 ## 9. Common Troubleshooting
+
+## Session Scope And Scheduling
+
+Run-time session scope controls:
+
+```bash
+pnpm dev run --session-scope newest-first
+pnpm dev run --session-scope oldest-first
+pnpm dev run --session-scope coverage
+pnpm dev run --max-sessions 25 --since-days 14
+```
+
+Mode meanings:
+
+- `newest-first`: newest activity to oldest.
+- `oldest-first`: oldest activity to newest.
+- `coverage`: unprocessed first, then least-recently processed.
+
+Scheduled mode can run indefinitely and avoid overlapping runs. It supports per-run limits for gradual full coverage over time:
+
+```bash
+pnpm dev schedule --interval-ms 3600000 --max-sessions 20 --session-scope coverage
+```
+
+`--session-scope` defaults to `coverage` in scheduled mode.
 
 - If provider calls fail, re-check `.env.local` values and runtime mode in `.dreamer/config/runtime.json`.
 - If you use GHE, set `GITHUB_HOST` and include correct auth mode.

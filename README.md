@@ -136,8 +136,32 @@ Primary workflows:
 
 ```bash
 pnpm dream
+pnpm dream:honcho
+pnpm dream:honcho:safe
 pnpm eval:dream-quality
 pnpm improve:dream
+```
+
+- `pnpm dream` uses repo worktree isolation.
+- `pnpm dream:honcho` runs without worktree isolation (useful for global/non-repo style runs).
+- `pnpm dream:honcho:safe` runs Honcho with repo worktree isolation.
+
+Session scoping controls:
+
+```bash
+pnpm dev run --max-sessions 20 --session-scope newest-first
+pnpm dev run --session-scope oldest-first
+pnpm dev run --session-scope coverage
+```
+
+- `newest-first` processes sessions from newest activity to oldest.
+- `oldest-first` processes sessions from oldest activity to newest.
+- `coverage` prioritizes sessions that have never been processed, then least-recently processed sessions.
+
+Scheduled runs support the same controls and default to coverage mode:
+
+```bash
+pnpm dev schedule --interval-ms 3600000 --max-sessions 20
 ```
 
 ## Current Implementation State

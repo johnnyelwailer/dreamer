@@ -1,11 +1,14 @@
 import type { DiscoveredCopilotSession } from "../../dream/copilot-debug-session-discovery.js";
 
+export type CopilotSessionScopeMode = "newest-first" | "oldest-first" | "coverage";
+
 export type CopilotDebugAdapterOptions = {
   fallbackSessionDir?: string;
   searchPaths?: string[];
   discoveryMode?: "append" | "override";
   lookbackDays?: number;
   maxSessionsPerRun?: number;
+  sessionScopeMode?: CopilotSessionScopeMode;
   /** When set, only sessions whose path is in this list are used. */
   sessionPathAllowlist?: string[];
 };

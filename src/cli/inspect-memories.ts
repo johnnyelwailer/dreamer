@@ -48,6 +48,25 @@ export async function runInspectMemories(workspaceDir: string, options: InspectM
       const refs = row.capture.references.map((ref) => `${ref.kind}:${ref.value}`).join("; ");
       ttyWriteLine(`  references: ${refs}`);
     }
+    const provenanceWorkspaceId = row.provenance?.workspaceId;
+    const provenanceWorkspaceDir = row.provenance?.workspaceDir;
+    if (provenanceWorkspaceId || provenanceWorkspaceDir) {
+      ttyWriteLine(
+        `  workspace: id=${provenanceWorkspaceId ?? "unknown"}${
+          provenanceWorkspaceDir ? ` dir=${provenanceWorkspaceDir}` : ""
+        }`
+      );
+    }
+    const provenanceRepoUrl = row.provenance?.repoRemoteUrl;
+    const provenanceRepoBranch = row.provenance?.repoBranch;
+    const provenanceRepoCommit = row.provenance?.repoCommit;
+    if (provenanceRepoUrl || provenanceRepoBranch || provenanceRepoCommit) {
+      ttyWriteLine(
+        `  repo: url=${provenanceRepoUrl ?? "unknown"} branch=${provenanceRepoBranch ?? "unknown"} commit=${
+          provenanceRepoCommit ?? "unknown"
+        }`
+      );
+    }
     ttyWriteLine(`  captured: ${row.provenance?.capturedAt ?? "unknown"} source=${row.provenance?.source ?? "unknown"}`);
     if (row.contradictoryTo) {
       const target = byId.get(row.contradictoryTo);

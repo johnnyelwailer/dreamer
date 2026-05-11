@@ -250,12 +250,8 @@ describe("SignalStage delegated mode", () => {
       "finalize_signal_extraction"
     ]);
     expect(provider.calls[0]?.prompt).toContain("session-1.md");
-    expect(provider.calls[0]?.prompt).toContain(
-      "Your first evidence step must be specialist review, either via orchestrator-run specialist passes or native delegation with the `task` tool"
-    );
-    expect(provider.calls[0]?.prompt).toContain("Use only these `agent_type` values: `explore`, `behavior-analyst`");
-    expect(provider.calls[0]?.prompt).toContain("Do not use `general-purpose`, `read_agent`, `bash`, `list_bash`, `write_bash`, `glob`, `grep`, `search`");
-    expect(provider.calls[0]?.prompt).toContain("`create`, `write`, `edit`, `delete`");
+    expect(provider.calls[0]?.prompt).toContain("Only the main agent calls `record_insight` and `finalize_signal_extraction`");
+    expect(provider.calls[0]?.prompt).toContain("Review evidence from the target session");
   });
 
   it("loads packaged signal agent prompts when workspace templates are absent", async () => {
@@ -374,7 +370,7 @@ describe("SignalStage delegated mode", () => {
     expect(context.diary).toContain("signals:skipped_no_user_turns=session-1.md");
   });
 
-  it("fails when finalize_signal_extraction is still missing after insist pass", async () => {
+  it("continues when finalize_signal_extraction is still missing after insist pass", async () => {
     const workspaceDir = mkdtempSync(join(tmpdir(), "dreamer-signal-stage-"));
     tempDirs.push(workspaceDir);
     const provider = new MockProvider();
@@ -383,8 +379,10 @@ describe("SignalStage delegated mode", () => {
     const context = buildContext(workspaceDir, "run-missing-finalize");
     context.events = createEvents();
 
-    await expect(stage.run(context)).rejects.toThrow(/missing required finalize_signal_extraction/);
+    await stage.run(context);
+
     expect(provider.calls).toHaveLength(2);
+    expect(context.diary).toContain("signals:missing_final_verdict=session-1.md");
   });
 
   it("requires signal finalization before accepting insights from a user-bearing session", async () => {
@@ -407,9 +405,10 @@ describe("SignalStage delegated mode", () => {
     const context = buildContext(workspaceDir, "run-missing-final");
     context.events = createEvents();
 
-    await expect(stage.run(context)).rejects.toThrow(/missing required finalize_signal_extraction/);
+    await stage.run(context);
 
     expect(context.insights).toHaveLength(0);
+    expect(context.diary).toContain("signals:missing_final_verdict=session-1.md");
   });
 
   it("accepts no-insights sessions only when finalized explicitly", async () => {

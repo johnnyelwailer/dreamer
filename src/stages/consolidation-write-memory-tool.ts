@@ -1,5 +1,7 @@
 import { defineTool } from "@github/copilot-sdk";
+import { execFileSync } from "node:child_process";
 import { MEMORY_CATEGORIES, type InsightRecord, type MemoryRecord } from "../core/types.js";
+import { workspaceId as resolveWorkspaceId } from "../dream/dreamer-home.js";
 import { EVIDENCE_ITEM_SCHEMA, REFERENCE_ITEM_SCHEMA, normalizeEvidence, normalizeReferences, normalizeTags, parseCategory, parseHorizon } from "./memory-tool-shared.js";
 import { inferEvidenceAndReferences } from "./consolidation-memory-metadata.js";
 import { validateReferencesStrict } from "./consolidation-reference-validation.js";
@@ -19,7 +21,24 @@ function makeId(value: string): string {
   return `mem:${Buffer.from(value).toString("base64url").slice(0, 20)}`;
 }
 
+function readGitField(workspaceDir: string, args: string[]): string | undefined {
+  try {
+    const value = execFileSync("git", ["-C", workspaceDir, ...args], {
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8"
+    }).trim();
+    return value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
+  const attributionWorkspaceId = resolveWorkspaceId(options.workspaceDir);
+  const repoRemoteUrl = readGitField(options.workspaceDir, ["config", "--get", "remote.origin.url"]);
+  const repoBranch = readGitField(options.workspaceDir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const repoCommit = readGitField(options.workspaceDir, ["rev-parse", "HEAD"]);
+
   return defineTool("write_memory", {
     description: "Add or update memory by statement+scope. Requires reason, horizon, and at least one reference.",
     parameters: {
@@ -96,7 +115,12 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
         existing.provenance = {
           ...existing.provenance,
           eventIds: derived.sessionIds.length ? derived.sessionIds.map((sessionId) => `session:${sessionId}`) : [`run:${options.runId}`],
-          capturedAt: options.nowIso
+          capturedAt: options.nowIso,
+          workspaceId: attributionWorkspaceId,
+          workspaceDir: options.workspaceDir,
+          repoRemoteUrl,
+          repoBranch,
+          repoCommit
         };
         options.onUpdated();
         return { textResultForLlm: "Memory reinforced.", resultType: "success" as const };
@@ -110,7 +134,12 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
         provenance: {
           source: "dream-run-agent",
           eventIds: derived.sessionIds.length ? derived.sessionIds.map((sessionId) => `session:${sessionId}`) : [`run:${options.runId}`],
-          capturedAt: options.nowIso
+          capturedAt: options.nowIso,
+          workspaceId: attributionWorkspaceId,
+          workspaceDir: options.workspaceDir,
+          repoRemoteUrl,
+          repoBranch,
+          repoCommit
         },
         context: {
           category,

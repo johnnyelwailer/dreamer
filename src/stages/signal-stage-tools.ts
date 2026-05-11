@@ -6,7 +6,7 @@ export function createSignalTools(
   runDir: string,
   sessions: WrittenSession[],
   onInsight: (insight: InsightRecord) => void,
-  sessionHint?: { sessionId?: string },
+  sessionHint?: { sessionId?: string; sessionReference?: string },
   onFinalize?: (verdict: { status: string; summary: string }) => void
 ) {
   return [

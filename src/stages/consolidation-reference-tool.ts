@@ -1,5 +1,6 @@
 import { defineTool } from "@github/copilot-sdk";
 import { readFile } from "node:fs/promises";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 type ReferenceToolOptions = {
@@ -25,8 +26,57 @@ function normalizeSessionName(value: string): string {
   return `${trimmed}.md`;
 }
 
+function readSessionHeaderId(path: string): string | null {
+  try {
+    const firstLines = readFileSync(path, "utf8").split("\n").slice(0, 6);
+    const idLine = firstLines.find((line) => line.startsWith("Source: ") && line.includes(" | ID: "));
+    if (!idLine) return null;
+    const marker = " | ID: ";
+    const index = idLine.indexOf(marker);
+    if (index < 0) return null;
+    const id = idLine.slice(index + marker.length).trim().toLowerCase();
+    return id || null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveSessionById(value: string, runDir: string): string | null {
+  const sessionsDir = join(runDir, "sessions");
+  if (!existsSync(sessionsDir)) return null;
+  const normalized = value.trim().toLowerCase();
+  const shortId = normalized.slice(0, 8);
+  const files = readdirSync(sessionsDir).filter((name) => /^session-\d+\.md$/i.test(name));
+  for (const file of files) {
+    const candidate = join(sessionsDir, file);
+    const headerId = readSessionHeaderId(candidate);
+    if (!headerId) continue;
+    if (headerId === normalized || headerId === shortId || normalized.startsWith(headerId)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export function sessionPath(value: string, runDir: string): string {
-  return join(runDir, "sessions", normalizeSessionName(value));
+  const trimmed = value.trim();
+  const sessionsDir = join(runDir, "sessions");
+
+  const explicitSessionMatch = trimmed.match(/(^|\/)session-\d+(?:\.md)?$/i);
+  if (explicitSessionMatch) {
+    const tail = explicitSessionMatch[0].replace(/^\//, "");
+    const name = tail.endsWith(".md") ? tail : `${tail}.md`;
+    return join(sessionsDir, name);
+  }
+
+  const normalizedName = normalizeSessionName(trimmed);
+  const normalizedPath = join(sessionsDir, normalizedName);
+  if (existsSync(normalizedPath)) return normalizedPath;
+
+  const byId = resolveSessionById(trimmed, runDir);
+  if (byId) return byId;
+
+  return normalizedPath;
 }
 
 export function resolveReferencePath(kind: string, value: string, options: ReferenceToolOptions): string | null {

@@ -11,6 +11,7 @@ Find durable workspace conventions and technical decisions:
 - decisions that affect future edits to the same feature
 
 Use read_file or bounded bash commands to inspect the session. Use get_message_details only for specific message ranges that contain evidence. Return a concise evidence summary and candidate memories to the main signal agent.
+Keep output compact: max 12 bullet points and max 1200 words.
 
 Do not call record_insight. Produce concise candidate memories with:
 - statement
