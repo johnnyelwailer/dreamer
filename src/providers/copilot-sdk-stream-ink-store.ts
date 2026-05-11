@@ -1,5 +1,6 @@
 import { type InkLogEntry, type InkToolActivity, type InkSubagent, type InkEventActivity, type InkSnapshot } from "./copilot-sdk-stream-ink-utils.js";
-import { summarize, eventActivityId } from "./copilot-sdk-stream-ink-utils-format.js";
+import { eventActivityId } from "./copilot-sdk-stream-ink-utils.js";
+import { summarize } from "./copilot-sdk-stream-ink-utils-format.js";
 
 const MAX_LOG_LINES = 300;
 

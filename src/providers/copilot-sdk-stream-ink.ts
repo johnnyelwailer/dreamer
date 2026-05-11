@@ -1,4 +1,5 @@
-import { render, createElement } from "ink";
+import { render } from "ink";
+import React from "react";
 import {
   resolveVerboseDefault,
   isToolStart,
@@ -15,7 +16,7 @@ let _inkSingleton: { store: ReturnType<typeof createInkStore>; agentTag: string;
 function getOrCreateInkSingleton(agentTag: string, verbose: boolean): ReturnType<typeof createInkStore> {
   if (!_inkSingleton) {
     const store = createInkStore();
-    const ink = render(createElement(InkView, { store }), {
+    const ink = render(React.createElement(InkView, { store }), {
       patchConsole: true,
       stdout: process.stdout,
       stderr: process.stderr

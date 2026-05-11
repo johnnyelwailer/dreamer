@@ -47,6 +47,49 @@ Use `pnpm eval:judge-comparison` to produce `reports/evals/dream-judge-compariso
 
 `dream`, `eval:dream-quality`, and `improve:dream` are safe-by-default and run in isolated git worktrees on dedicated branches.
 
+## Real Usage Examples
+
+### Inspect available CLI commands
+
+```bash
+pnpm dev --help
+```
+
+Example output:
+
+```text
+Usage: dreamer [options] [command]
+
+Commands:
+  run [options]       Run one dream cycle
+  schedule [options]  Run scheduled dream cycles
+  setup [options]     Setup, integration checks, and provider onboarding helpers
+  metrics             Show numeric run counters from reports/metrics.json
+  status              Show report file status and latest run metadata
+  inspect             Inspect memories and generated insights
+```
+
+### Run focused stream tests
+
+```bash
+pnpm vitest run tests/unit/copilot-sdk-stream.test.ts tests/unit/copilot-sdk-stream-state.test.ts
+```
+
+Example output:
+
+```text
+Test Files  2 passed (2)
+Tests      10 passed (10)
+```
+
+### Run dream quality eval
+
+```bash
+pnpm eval:dream-quality
+```
+
+This command writes evaluation artifacts under `reports/evals/`, including `dream-quality-eval.json`.
+
 ## Safe Workspace Mode
 
 For mutation-heavy workflows, isolated worktrees are now the default so the primary branch is untouched:
@@ -112,7 +155,7 @@ Configured in the runtime manifest under `provider.sdk`:
 
 - `providerMode`: `byok` or `copilot`
 - `authMode`: `none`, `logged-in-user`, `github-token`, `session-github-token`
-- `infiniteSessionsEnabled`: `false` by default to avoid persisting Copilot SDK session state and cluttering session lists
+- `infiniteSessionsEnabled`: `true` by default in runtime defaults; set to `false` to avoid persisting Copilot SDK session state and cluttering session lists
 
 This supports BYOK endpoints, GitHub account auth, GHE host usage, and local OpenAI-compatible model endpoints.
 
