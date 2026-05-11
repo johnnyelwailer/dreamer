@@ -5,6 +5,7 @@ import type { RuntimeStageAgentPackConfig } from "./runtime-manifest.js";
 import { buildCopilotSdkProviderOptions } from "./copilot-sdk-options.js";
 import { discoverCopilotDebugSessionDir } from "./copilot-debug-session-discovery.js";
 import { discoverClaudeCodeLogPath, discoverCodexTraceLogPath } from "./adapter-log-discovery.js";
+import { defaultCopilotMemoryTarget } from "./copilot-memory-path.js";
 import { loadWorkspaceDotenv, readList, readPositiveInteger, readPositiveNumber } from "./config-env.js";
 import { workspaceStorageDir } from "./dreamer-home.js";
 
@@ -13,6 +14,14 @@ type HonchoEnvironment = "local" | "production";
 function readHonchoEnvironment(value: string | undefined): HonchoEnvironment | undefined {
   if (value === "local" || value === "production") return value;
   return undefined;
+}
+
+function readBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") return true;
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") return false;
+  return fallback;
 }
 
 export type DreamConfig = {
@@ -34,6 +43,9 @@ export type DreamConfig = {
   terminalCastPath: string;
   browserHarPath: string;
   copilotMemoryPath: string;
+  memoryBackupEnabled: boolean;
+  memoryBackupDir: string;
+  memoryBackupExternalOnly: boolean;
   honchoExportPath: string;
   honchoWorkspaceId: string;
   honchoApiKey?: string;
@@ -100,8 +112,10 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
       process.env.DREAM_CODEX_TRACE_FILE ?? discoveredCodexTracePath ?? join(fixturesDir, "codex.jsonl"),
     terminalCastPath: process.env.DREAM_TERMINAL_CAST_FILE ?? join(fixturesDir, "terminal.cast"),
     browserHarPath: process.env.DREAM_BROWSER_TRACE_FILE ?? join(fixturesDir, "browser.har"),
-    copilotMemoryPath:
-      process.env.DREAM_COPILOT_MEMORY_FILE ?? join(storageDir, "copilot-memory.json"),
+    copilotMemoryPath: process.env.DREAM_COPILOT_MEMORY_FILE ?? defaultCopilotMemoryTarget(workspaceDir),
+    memoryBackupEnabled: readBoolean(process.env.DREAM_MEMORY_BACKUP_ENABLED, true),
+    memoryBackupDir: process.env.DREAM_MEMORY_BACKUP_DIR ?? join(storageDir, "backups", "memories"),
+    memoryBackupExternalOnly: readBoolean(process.env.DREAM_MEMORY_BACKUP_EXTERNAL_ONLY, true),
     honchoExportPath:
       process.env.DREAM_HONCHO_WORKSPACE_FILE ?? join(storageDir, "honcho", "workspace.json"),
     honchoWorkspaceId: process.env.DREAM_HONCHO_WORKSPACE_ID ?? process.env.HONCHO_WORKSPACE_ID ?? "dreamer",

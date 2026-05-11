@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it } from "vitest";
 import { BrowserTraceAdapter } from "../../src/adapters/browser-trace-adapter.js";
 import { ClaudeCodeAdapter } from "../../src/adapters/claude-code-adapter.js";
 import { CodexTraceAdapter } from "../../src/adapters/codex-trace-adapter.js";
@@ -23,6 +26,12 @@ describe("adapter matrix", () => {
 });
 
 describe("backend matrix", () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map(async (dir) => rm(dir, { recursive: true, force: true })));
+  });
+
   it("round-trips memory records in the copilot backend", async () => {
     const memory = [
       {
@@ -40,6 +49,42 @@ describe("backend matrix", () => {
     const copilot = new CopilotMemoryBackend(process.cwd(), ".dreamer/test/copilot-memory.json");
     await copilot.save(memory);
     expect((await copilot.load()).length).toBe(1);
+  });
+
+  it("writes markdown files in copilot memory-tool layout", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dreamer-copilot-memory-"));
+    tempDirs.push(root);
+    const memory = [
+      {
+        id: "m-user",
+        scope: "user" as const,
+        statement: "Prefer concise status updates",
+        confidence: 0.9,
+        provenance: {
+          source: "test",
+          eventIds: ["e-1"],
+          capturedAt: "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        id: "m-workspace",
+        scope: "workspace" as const,
+        statement: "Use pnpm in this repository",
+        confidence: 0.9,
+        provenance: {
+          source: "test",
+          eventIds: ["e-2"],
+          capturedAt: "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ];
+
+    const copilot = new CopilotMemoryBackend(process.cwd(), root);
+    await copilot.save(memory);
+
+    await expect(stat(join(root, "dreamer-memory.md"))).resolves.toBeDefined();
+    await expect(stat(join(root, "repo", "dreamer-repo-memory.md"))).resolves.toBeDefined();
+    await expect(copilot.load()).resolves.toHaveLength(2);
   });
 });
 

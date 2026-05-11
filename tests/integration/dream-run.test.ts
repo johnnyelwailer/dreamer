@@ -47,10 +47,11 @@ describe("dream run integration", () => {
     process.env.COPILOT_SDK_BASE_URL = "";
     process.env.COPILOT_SDK_API_KEY = "";
     process.env.COPILOT_SDK_MODEL = runtime.provider.defaultModel;
+    process.env.DREAM_COPILOT_MEMORY_FILE = join(storageDir, "copilot-memory.md");
     await rm(join(storageDir, "state.json"), { force: true });
     await runDream(workspaceDir);
     const diary = await stat(join(storageDir, "reports", "dream-diary.md"));
-    const copilotMemory = await stat(join(storageDir, "copilot-memory.json"));
+    const copilotMemory = await stat(join(storageDir, "copilot-memory.md"));
     const evalReport = await stat(join(storageDir, runtime.eval.reportPath)).catch(() => null);
     expect(diary.isFile()).toBe(true);
     expect(copilotMemory.isFile()).toBe(true);
@@ -59,6 +60,7 @@ describe("dream run integration", () => {
     delete process.env.DREAM_CLAUDE_CODE_FILE;
     delete process.env.DREAM_BACKEND_ID;
     delete process.env.DREAM_MIN_SESSIONS;
+    delete process.env.DREAM_COPILOT_MEMORY_FILE;
     delete process.env.COPILOT_SDK_BASE_URL;
     delete process.env.COPILOT_SDK_API_KEY;
     delete process.env.COPILOT_SDK_MODEL;

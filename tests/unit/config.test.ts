@@ -10,7 +10,8 @@ const envKeys = [
   "DREAM_ADAPTER_ID",
   "DREAM_STAGE_ORDER",
   "COPILOT_SDK_MODEL",
-  "DREAM_RUNTIME_CONFIG_FILE"
+  "DREAM_RUNTIME_CONFIG_FILE",
+  "DREAM_MEMORY_BACKUP_ENABLED"
 ] as const;
 const envSnapshot = new Map(envKeys.map((key) => [key, process.env[key]]));
 
@@ -89,6 +90,8 @@ describe("readDreamConfig", () => {
     expect(config.adapterId).toBe("adapter.jsonl.event");
     expect(config.stageOrder).toEqual(["stage.orientation", "stage.observability"]);
     expect(config.copilotSdkModel).toBe("dotenv-model");
+    expect(config.memoryBackupEnabled).toBe(true);
+    expect(config.memoryBackupExternalOnly).toBe(true);
   });
 
   it("does not let .env.local override an exported env var", async () => {
@@ -100,5 +103,15 @@ describe("readDreamConfig", () => {
     const config = readDreamConfig(workspaceDir);
 
     expect(config.copilotSdkModel).toBe("process-model");
+  });
+
+  it("reads memory backup toggles from environment", async () => {
+    const workspaceDir = await tempWorkspace();
+    await writeRuntime(workspaceDir);
+    process.env.DREAM_MEMORY_BACKUP_ENABLED = "false";
+
+    const config = readDreamConfig(workspaceDir);
+
+    expect(config.memoryBackupEnabled).toBe(false);
   });
 });

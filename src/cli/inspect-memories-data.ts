@@ -1,6 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { MemoryRecord } from "../core/types.js";
+import { CopilotMemoryBackend } from "../backends/copilot-memory-backend.js";
+import { defaultCopilotMemoryTarget } from "../dream/copilot-memory-path.js";
 import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
 export type SourceId = "file" | "copilot" | "honcho" | "all";
@@ -9,7 +11,7 @@ function memoryPaths(workspaceDir: string): Record<Exclude<SourceId, "all">, str
   const storageDir = workspaceStorageDir(workspaceDir);
   return {
     file: join(storageDir, "memory.json"),
-    copilot: join(storageDir, "copilot-memory.json"),
+    copilot: process.env.DREAM_COPILOT_MEMORY_FILE ?? defaultCopilotMemoryTarget(workspaceDir),
     honcho: join(storageDir, "honcho", "workspace.json")
   };
 }
@@ -25,6 +27,14 @@ function filterNoise(records: MemoryRecord[]): MemoryRecord[] {
 export async function pruneNoiseRecords(workspaceDir: string, source: SourceId): Promise<number> {
   let removed = 0;
   for (const key of selectedSources(source)) {
+    if (key === "copilot") {
+      const backend = new CopilotMemoryBackend(workspaceDir, memoryPaths(workspaceDir).copilot);
+      const current = await backend.load();
+      const next = filterNoise(current);
+      removed += current.length - next.length;
+      if (next.length !== current.length) await backend.save(next);
+      continue;
+    }
     const path = memoryPaths(workspaceDir)[key];
     try {
       const raw = await readFile(path, "utf8");
@@ -60,6 +70,12 @@ export async function pruneNoiseRecords(workspaceDir: string, source: SourceId):
 export async function loadMemoryRows(workspaceDir: string, source: SourceId): Promise<Array<MemoryRecord & { from: string }>> {
   const out: Array<MemoryRecord & { from: string }> = [];
   for (const key of selectedSources(source)) {
+    if (key === "copilot") {
+      const backend = new CopilotMemoryBackend(workspaceDir, memoryPaths(workspaceDir).copilot);
+      const rows = await backend.load();
+      for (const row of rows) out.push({ ...row, from: key });
+      continue;
+    }
     const path = memoryPaths(workspaceDir)[key];
     try {
       const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;

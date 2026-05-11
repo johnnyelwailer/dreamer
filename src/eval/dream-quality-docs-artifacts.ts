@@ -27,7 +27,8 @@ export async function readArtifacts(workspaceDir: string): Promise<Array<{ path:
     { label: "reports/metrics.json", fullPath: join(storageDir, "reports", "metrics.json") },
     { label: "reports/pipeline-log.json", fullPath: join(storageDir, "reports", "pipeline-log.json") },
     { label: "memory.json", fullPath: join(storageDir, "memory.json") },
-    { label: "copilot-memory.json", fullPath: join(storageDir, "copilot-memory.json") }
+    { label: "copilot-memory.json", fullPath: join(storageDir, "copilot-memory.json") },
+    { label: "copilot-memory.md", fullPath: join(storageDir, "copilot-memory.md") }
   ];
   const artifacts: Array<{ path: string; content: string }> = [];
   for (const { label, fullPath } of artifactEntries) {

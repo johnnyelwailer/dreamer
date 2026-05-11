@@ -6,7 +6,8 @@ export async function readMemoryArtifacts(workspaceDir: string): Promise<Array<{
   const storageDir = workspaceStorageDir(workspaceDir);
   const memoryFiles = [
     { label: "memory.json", fullPath: join(storageDir, "memory.json") },
-    { label: "copilot-memory.json", fullPath: join(storageDir, "copilot-memory.json") }
+    { label: "copilot-memory.json", fullPath: join(storageDir, "copilot-memory.json") },
+    { label: "copilot-memory.md", fullPath: join(storageDir, "copilot-memory.md") }
   ];
   const artifacts: Array<{ path: string; content: string }> = [];
   for (const { label, fullPath } of memoryFiles) {

@@ -14,7 +14,7 @@ export function resolveJudgeEvidenceFiles(adapter: TranscriptAdapter): JudgeEvid
 
 export function resolveMemoryOutputFiles(workspaceDir: string): JudgeEvidenceFile[] {
   const storageDir = workspaceStorageDir(workspaceDir);
-  const candidates = ["memory.json", "copilot-memory.json"];
+  const candidates = ["memory.json", "copilot-memory.json", "copilot-memory.md"];
   return candidates
     .filter((p) => existsSync(join(storageDir, p)))
     .map((p) => ({ kind: "memory-output" as const, path: join(storageDir, p) }));
