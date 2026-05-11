@@ -150,12 +150,20 @@ Working today:
 - agent harness mode/auth configuration via Copilot SDK runtime
 - generated docs + eval report pipeline
 
+Tested with reasonable confidence so far:
+- memory extraction from transcripts
+- the dreaming pipeline end-to-end flow
+- dream-quality evaluation flow (primarily a development verification feature)
+
 Still changing / missing maturity:
 - some runtime defaults and UX are still being refined
 - cross-runtime/provider behavior is not fully exercised in all combinations
+- actual memory backend behavior is not fully tested across all backends
+- Windows support is not fully tested
 - plugin contracts may evolve
 - long-running scheduling and operational hardening are still limited
-- not all production scenarios are fully tested yet
+- broader production scenarios are still not fully tested yet
+- CI/test matrix coverage is still incomplete in several areas
 
 ## Useful Docs
 
