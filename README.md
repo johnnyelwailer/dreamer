@@ -25,13 +25,35 @@ pnpm dream
 ```
 
 What setup does today:
-- selects transcript adapter, memory backend, provider mode/auth mode, and model settings
+- selects transcript adapter, memory backend, and agent harness/runtime settings (provider mode/auth mode/model)
 - writes runtime config and `.env.local` fallbacks
 - can run basic provider verification
 
-## Supported Providers
+## Pluggable Categories
 
-Dreamer currently uses the Copilot SDK provider runtime with two provider modes:
+Dreamer currently has three main pluggable surfaces:
+
+- transcript adapters
+  - ingest conversation/session data into normalized events
+- memory systems (backends)
+  - load/save final memory records
+- agent harness/runtime
+  - runs the model/tool loop (currently via Copilot SDK runtime)
+
+## Transcript Adapters
+
+Built-in adapters today:
+
+- `adapter.copilot.debug`
+- `adapter.codex.trace`
+- `adapter.claude.code`
+- `adapter.jsonl.event`
+
+These are selectable in setup and can be replaced by plugin adapters.
+
+## Agent Harness Runtime
+
+The current harness uses the Copilot SDK runtime with two provider modes:
 
 - `copilot`
   - auth: `logged-in-user`, `github-token`, `session-github-token`
@@ -41,7 +63,7 @@ Dreamer currently uses the Copilot SDK provider runtime with two provider modes:
   - setup options include provider types `openai`, `azure`, `anthropic`
   - common path today is OpenAI-compatible endpoint + model id
 
-## Provider Setup Examples
+## Agent Harness Setup Examples
 
 ### 1) Copilot account (logged-in user)
 
@@ -87,7 +109,7 @@ pnpm dev setup --yes \
   --base-url-env COPILOT_SDK_BASE_URL
 ```
 
-## Memory Providers And Integration
+## Memory Systems And Integration
 
 Built-in backends:
 - `backend.file.memory`
@@ -101,7 +123,7 @@ To use Honcho backend, set one of:
 - `HONCHO_API_KEY`, `HONCHO_WORKSPACE_ID`
 - or `DREAM_HONCHO_*` overrides
 
-Custom backends/adapters/providers/stages can be added through plugins. See `docs/plugins.md`.
+Custom backends/adapters/agent-runtime providers/stages can be added through plugins. See `docs/plugins.md`.
 
 ## What To Expect
 
@@ -125,12 +147,12 @@ This project is functional but still early-stage.
 Working today:
 - setup wizard and runtime manifest wiring
 - multiple transcript adapters and memory backends
-- provider mode/auth mode configuration via Copilot SDK runtime
+- agent harness mode/auth configuration via Copilot SDK runtime
 - generated docs + eval report pipeline
 
 Still changing / missing maturity:
 - some runtime defaults and UX are still being refined
-- cross-provider behavior is not fully exercised in all combinations
+- cross-runtime/provider behavior is not fully exercised in all combinations
 - plugin contracts may evolve
 - long-running scheduling and operational hardening are still limited
 - not all production scenarios are fully tested yet
