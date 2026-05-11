@@ -92,7 +92,14 @@ export class ConsolidationStage implements PipelineStage {
     );
 
     try {
-      await runConsolidationAgentPasses(this.provider, prompt, tools, this.agentPack, customAgents);
+      await runConsolidationAgentPasses(
+        this.provider,
+        prompt,
+        tools,
+        this.agentPack,
+        customAgents,
+        () => !hasFinalVerdict()
+      );
     } catch (error) {
       context.diary.push(`consolidation:agent_error=${String(error).slice(0, 120)}`);
     }

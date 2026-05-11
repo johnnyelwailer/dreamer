@@ -55,7 +55,9 @@ export type RunAgentCustomAgentConfig = {
 export type RunAgentOptions = {
   workingDirectory?: string;
   retries?: string[];
+  shouldRetry?: (context: { retryPrompt: string; retryIndex: number; lastOutput: string }) => boolean | Promise<boolean>;
   streamTag?: string;
+  maxSubagentParallelism?: number;
   customAgents?: RunAgentCustomAgentConfig[];
   defaultAgent?: RunAgentDefaultAgentConfig;
   selectedAgent?: string;

@@ -1,11 +1,11 @@
 import { join } from "node:path";
-import { readFileSync } from "node:fs";
 import { readRuntimeManifest } from "./runtime-manifest.js";
 import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provider.js";
 import type { RuntimeStageAgentPackConfig } from "./runtime-manifest.js";
 import { buildCopilotSdkProviderOptions } from "./copilot-sdk-options.js";
 import { discoverCopilotDebugSessionDir } from "./copilot-debug-session-discovery.js";
 import { discoverClaudeCodeLogPath, discoverCodexTraceLogPath } from "./adapter-log-discovery.js";
+import { loadWorkspaceDotenv, readList, readPositiveInteger, readPositiveNumber } from "./config-env.js";
 import { workspaceStorageDir } from "./dreamer-home.js";
 
 type HonchoEnvironment = "local" | "production";
@@ -50,47 +50,12 @@ export type DreamConfig = {
   docsMaxEvents: number;
 };
 
-function readPositiveNumber(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function readPositiveInteger(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function readList(value: string | undefined): string[] {
-  if (!value) return [];
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function loadWorkspaceDotenv(workspaceDir: string): void {
-  const envPath = join(workspaceDir, ".env.local");
-  let raw: string;
-  try {
-    raw = readFileSync(envPath, "utf8");
-  } catch {
-    return;
-  }
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const match = trimmed.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (!match?.[1]) continue;
-    if (process.env[match[1]]) continue;
-    const value = (match[2] ?? "").trim().replace(/^['"]|['"]$/g, "");
-    if (value) process.env[match[1]] = value;
-  }
-}
-
 export function readDreamConfig(workspaceDir: string): DreamConfig {
-  loadWorkspaceDotenv(workspaceDir);
+  try {
+    loadWorkspaceDotenv(workspaceDir);
+  } catch {
+    // Missing .env.local is expected.
+  }
   const storageDir = workspaceStorageDir(workspaceDir);
   const fixturesDir = join(storageDir, "fixtures");
   const runtime = readRuntimeManifest(workspaceDir);

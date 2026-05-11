@@ -58,6 +58,7 @@ describe("buildCopilotSdkProviderOptions", () => {
   afterEach(() => {
     delete process.env.COPILOT_SDK_MAX_CONTEXT_WINDOW_TOKENS;
     delete process.env.COPILOT_SDK_MAX_PROMPT_TOKENS;
+    delete process.env.COPILOT_SDK_MAX_SUBAGENT_PARALLELISM;
     delete process.env.COPILOT_SDK_STREAMING;
     delete process.env.COPILOT_SDK_INCLUDE_SUBAGENT_STREAMING_EVENTS;
   });
@@ -117,6 +118,18 @@ describe("buildCopilotSdkProviderOptions", () => {
     expect(options.sessionConfig.streaming).toBe(true);
     expect(options.sessionConfig.includeSubAgentStreamingEvents).toBe(false);
   });
+
+  it("resolves max subagent parallelism from runtime and allows env override", () => {
+    const runtime = createRuntimeManifest();
+    runtime.provider.sdk.maxSubagentParallelism = 2;
+
+    const runtimeOnly = buildCopilotSdkProviderOptions(runtime, "gpt-5", process.cwd());
+    expect(runtimeOnly.maxSubagentParallelism).toBe(2);
+
+    process.env.COPILOT_SDK_MAX_SUBAGENT_PARALLELISM = "1";
+    const envOverride = buildCopilotSdkProviderOptions(runtime, "gpt-5", process.cwd());
+    expect(envOverride.maxSubagentParallelism).toBe(1);
+  });
 });
 
 describe("parseRuntimeManifestObject", () => {
@@ -175,6 +188,88 @@ describe("parseRuntimeManifestObject", () => {
     });
 
     expect(parsed.provider.sdk.infiniteSessionsEnabled).toBe(false);
+  });
+
+  it("parses provider.sdk.maxSubagentParallelism when provided", () => {
+    const parsed = parseRuntimeManifestObject({
+      provider: {
+        id: "provider.copilot.sdk",
+        defaultModel: "gpt-5",
+        sdk: {
+          authMode: "none",
+          providerMode: "copilot",
+          requestTimeoutMs: 1000,
+          maxSubagentParallelism: 2,
+          clientExtraEnvVars: []
+        }
+      },
+      pipeline: { stageOrder: ["stage.orientation"] },
+      docs: {
+        outputRootPath: "docs/generated",
+        fallbackOutputPath: "docs/generated/DREAM_OUTPUT.md",
+        promptTemplatePath: ".dreamer/config/prompts/docs-generation.md",
+        improvementHintsPath: ".dreamer/config/prompts/docs-improvement-hints.md",
+        maxSignals: 25,
+        maxMemories: 25,
+        maxEvents: 25
+      },
+      eval: {
+        casesPath: ".dreamer/config/evals/copilot-sdk-cases.json",
+        reportPath: "reports/evals/copilot-sdk-eval.json",
+        requestTimeoutMs: 120000,
+        maxAttempts: 3,
+        quality: {
+          rubricPath: ".dreamer/config/evals/dream-quality-rubric.json",
+          reportPath: "reports/evals/dream-quality-eval.json",
+          selfImproveReportPath: "reports/evals/dream-self-improve.json",
+          minPassingScore: 0.8,
+          maxHintsToPersist: 8
+        }
+      }
+    });
+
+    expect(parsed.provider.sdk.maxSubagentParallelism).toBe(2);
+  });
+
+  it("rejects non-positive provider.sdk.maxSubagentParallelism values", () => {
+    expect(() =>
+      parseRuntimeManifestObject({
+        provider: {
+          id: "provider.copilot.sdk",
+          defaultModel: "gpt-5",
+          sdk: {
+            authMode: "none",
+            providerMode: "copilot",
+            requestTimeoutMs: 1000,
+            maxSubagentParallelism: 0,
+            clientExtraEnvVars: []
+          }
+        },
+        pipeline: { stageOrder: ["stage.orientation"] },
+        docs: {
+          outputRootPath: "docs/generated",
+          fallbackOutputPath: "docs/generated/DREAM_OUTPUT.md",
+          promptTemplatePath: ".dreamer/config/prompts/docs-generation.md",
+          improvementHintsPath: ".dreamer/config/prompts/docs-improvement-hints.md",
+          maxSignals: 25,
+          maxMemories: 25,
+          maxEvents: 25
+        },
+        eval: {
+          casesPath: ".dreamer/config/evals/copilot-sdk-cases.json",
+          reportPath: "reports/evals/copilot-sdk-eval.json",
+          requestTimeoutMs: 120000,
+          maxAttempts: 3,
+          quality: {
+            rubricPath: ".dreamer/config/evals/dream-quality-rubric.json",
+            reportPath: "reports/evals/dream-quality-eval.json",
+            selfImproveReportPath: "reports/evals/dream-self-improve.json",
+            minPassingScore: 0.8,
+            maxHintsToPersist: 8
+          }
+        }
+      })
+    ).toThrow(/provider\.sdk\.maxSubagentParallelism/);
   });
 
   it("rejects non-boolean provider.sdk.infiniteSessionsEnabled values", () => {

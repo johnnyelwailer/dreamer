@@ -26,6 +26,7 @@ pnpm dev setup --yes \
   --provider-mode byok \
   --auth-mode none \
   --model gpt-4o \
+  --max-subagent-parallelism 2 \
   --base-url http://localhost:11434/v1 \
   --no-verify
 ```
@@ -46,6 +47,10 @@ Optional API key variables:
 - `COPILOT_SDK_API_KEY`
 - `HOSTED_LLM_API_KEY`
 
+Optional subagent concurrency override (recommended for BYOK/rate-limited endpoints):
+
+- `COPILOT_SDK_MAX_SUBAGENT_PARALLELISM`
+
 ## 4. Verify Runtime Mode
 
 Run:
@@ -58,6 +63,7 @@ Check:
 
 - `provider.sdk.providerMode`
 - `provider.sdk.authMode`
+- `provider.sdk.maxSubagentParallelism`
 - `provider.sdk.infiniteSessionsEnabled`
 
 Use `pnpm dev setup --verify` to run a small provider request against the selected settings.

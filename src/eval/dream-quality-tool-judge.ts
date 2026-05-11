@@ -4,6 +4,7 @@ import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provide
 import type { JudgeEvidenceFile } from "./dream-quality-evidence.js";
 import { extractAssistantText, type ToolJudgePayload } from "./dream-quality-tool-judge-helpers.js";
 import { createEvidenceTools } from "./dream-quality-evidence-tools.js";
+import { createJudgeToolGuard } from "./dream-quality-tool-judge-guard.js";
 import { createTtyStatus } from "../shared/tty-progress.js";
 import { createDreamAgentStreamHandler } from "../providers/copilot-sdk-stream.js";
 
@@ -36,14 +37,6 @@ function isEnabled(raw: string | undefined): boolean {
 
 const ALLOWED_JUDGE_TOOLS = new Set(["submit_quality_scores", "list_quality_evidence_files", "read_quality_evidence_chunk", "search_quality_evidence"]);
 
-function judgePermissionDecision(request: unknown): { kind: "approve-once" } | { kind: "reject"; feedback: string } {
-  const candidate = request as { kind?: string; toolName?: string };
-  if (candidate.kind === "custom-tool" && candidate.toolName && ALLOWED_JUDGE_TOOLS.has(candidate.toolName)) {
-    return { kind: "approve-once" };
-  }
-  return { kind: "reject", feedback: "Judge session is restricted to quality evidence tools only." };
-}
-
 export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJudgeResult> {
   const client = new CopilotClient(input.providerOptions.clientOptions as Pick<CopilotClientOptions, "useLoggedInUser" | "gitHubToken" | "cliPath" | "cliUrl" | "env">);
   const status = createTtyStatus("[eval:dream-quality]");
@@ -56,6 +49,7 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
   let firstStreamDeltaMs: number | undefined;
   const liveStream = isEnabled(process.env.DREAM_EVAL_LIVE_STREAM);
   const streamHandler = createDreamAgentStreamHandler({ agentTag: "judge" });
+  const guard = createJudgeToolGuard(ALLOWED_JUDGE_TOOLS);
 
   const tools = createEvidenceTools(input.evidenceFiles, input.rubricDimensionIds, (payload) => {
     captured = payload;
@@ -78,7 +72,8 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
       configDir: input.providerOptions.sessionConfig.configDir,
       // Use homedir so the agent's built-in file tools can reach transcript/memory paths
       workingDirectory: homedir(),
-      onPermissionRequest: judgePermissionDecision,
+      onPermissionRequest: guard.onPermissionRequest,
+      hooks: guard.hooks,
       onEvent: (event) => {
         streamHandler?.(event);
         streamEventCount += 1;
@@ -126,7 +121,9 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
     };
   } catch (error) {
     const message = String(error);
-    const streamDiag = `stream_events=${streamEventCount},stream_deltas=${streamDeltaCount},first_delta_ms=${firstStreamDeltaMs ?? "none"}`;
+    const streamDiag =
+      `stream_events=${streamEventCount},stream_deltas=${streamDeltaCount},first_delta_ms=${firstStreamDeltaMs ?? "none"},` +
+      `denied_tools=${guard.deniedToolCount()}`;
     status.done(`judge failed: ${message}`);
     return {
       rawOutput: lastRawOutput,

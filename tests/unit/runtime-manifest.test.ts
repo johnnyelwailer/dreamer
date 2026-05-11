@@ -61,7 +61,7 @@ function baseRuntime(): Record<string, unknown> {
 }
 
 describe("readRuntimeManifest", () => {
-  it("uses workspace-specific runtime files by default and merges bundled agent packs when missing", () => {
+  it("uses workspace-specific runtime files by default and merges bundled default-agent exclusions", () => {
     const workspaceDir = mkdtempSync(join(tmpdir(), "dreamer-runtime-"));
     tempDirs.push(workspaceDir);
     delete process.env.DREAM_RUNTIME_CONFIG_FILE;
@@ -90,7 +90,8 @@ describe("readRuntimeManifest", () => {
     expect(runtime.pipeline.agentPacks?.["stage.signal"]?.customAgents.map((agent) => agent.name)).toEqual([
       "workspace-local-reader"
     ]);
-    expect(runtime.pipeline.agentPacks?.["stage.signal"]?.defaultAgent?.excludedTools).toEqual(["read_file"]);
+    expect(runtime.pipeline.agentPacks?.["stage.signal"]?.defaultAgent?.excludedTools).toContain("read_file");
+    expect(runtime.pipeline.agentPacks?.["stage.signal"]?.defaultAgent?.excludedTools).toContain("create");
   });
 
   it("falls back to bundled runtime config when no workspace runtime file exists", () => {
@@ -107,6 +108,8 @@ describe("readRuntimeManifest", () => {
     ]);
     expect(runtime.pipeline.agentPacks?.["stage.signal"]?.defaultAgent?.excludedTools).toContain("bash");
     expect(runtime.pipeline.agentPacks?.["stage.signal"]?.defaultAgent?.excludedTools).toContain("view");
+    expect(runtime.pipeline.agentPacks?.["stage.signal"]?.defaultAgent?.excludedTools).toContain("create");
+    expect(runtime.pipeline.agentPacks?.["stage.signal"]?.defaultAgent?.excludedTools).toContain("write_file");
   });
 
   it("respects explicitly configured runtime files", () => {

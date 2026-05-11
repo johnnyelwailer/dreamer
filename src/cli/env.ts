@@ -57,6 +57,7 @@ export function collectProviderEnvVarNames(workspaceDir: string): string[] {
   if (sdk.authMode === "session-github-token" && sdk.sessionGitHubTokenEnvVar) names.add(sdk.sessionGitHubTokenEnvVar);
   if (sdk.cliPathEnvVar) names.add(sdk.cliPathEnvVar);
   if (sdk.cliUrlEnvVar) names.add(sdk.cliUrlEnvVar);
+  names.add("COPILOT_SDK_MAX_SUBAGENT_PARALLELISM");
   for (const extra of sdk.clientExtraEnvVars) names.add(extra);
 
   if (sdk.providerMode === "byok" && sdk.byok) {

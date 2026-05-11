@@ -90,6 +90,24 @@ describe("CopilotSdkProvider.runAgent", () => {
     expect(mockState.prompts).toEqual(["analyze", "retry"]);
   });
 
+  it("only sends retry prompts when shouldRetry returns true", async () => {
+    const provider = new CopilotSdkProvider({
+      model: "gpt-5",
+      requestTimeoutMs: 1000,
+      clientOptions: { useLoggedInUser: false },
+      sessionConfig: {
+        workingDirectory: process.cwd(),
+      }
+    });
+
+    await provider.runAgent("analyze", [], {
+      retries: ["retry-1", "retry-2"],
+      shouldRetry: ({ retryIndex }) => retryIndex === 0
+    });
+
+    expect(mockState.prompts).toEqual(["analyze", "retry-1"]);
+  });
+
   it("denies read_bash unless bash previously returned the shellId", async () => {
     const provider = new CopilotSdkProvider({
       model: "gpt-5",
@@ -158,6 +176,9 @@ describe("CopilotSdkProvider.runAgent", () => {
     const hooks = args.hooks as {
       onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => unknown;
     };
+    const onEvent = args.onEvent as (event: unknown) => void;
+
+    onEvent({ type: "subagent.completed", data: { agentName: "timeline-analyst" } });
 
     expect(
       hooks.onPreToolUse({
@@ -232,7 +253,7 @@ describe("CopilotSdkProvider.runAgent", () => {
     });
 
     await provider.runAgent("analyze", [], {
-      defaultAgent: { excludedTools: ["bash", "read_file"] },
+      defaultAgent: { excludedTools: ["bash", "read_file", "create"] },
       customAgents: [
         {
           name: "failure-analyst",
@@ -258,6 +279,12 @@ describe("CopilotSdkProvider.runAgent", () => {
       hooks.onPreToolUse({
         toolName: "bash",
         toolArgs: { command: "wc -l session-2.md" }
+      })
+    ).toMatchObject({ permissionDecision: "deny" });
+    expect(
+      hooks.onPreToolUse({
+        toolName: "create",
+        toolArgs: { path: "sessions/session-3.md", file_text: "nope" }
       })
     ).toMatchObject({ permissionDecision: "deny" });
     expect(onPermissionRequest({ kind: "shell" }, { sessionId: "session-1" })).toMatchObject({ kind: "reject" });
@@ -296,5 +323,184 @@ describe("CopilotSdkProvider.runAgent", () => {
         toolArgs: { command: "wc -l session-2.md" }
       })
     ).toBeUndefined();
+  });
+
+  it("keeps default-agent exclusions lifted for remaining overlapping subagents", async () => {
+    const provider = new CopilotSdkProvider({
+      model: "gpt-5",
+      requestTimeoutMs: 1000,
+      clientOptions: { useLoggedInUser: false },
+      sessionConfig: {
+        workingDirectory: process.cwd()
+      }
+    });
+
+    await provider.runAgent("analyze", [], {
+      defaultAgent: { excludedTools: ["bash"] },
+      customAgents: [
+        {
+          name: "failure-analyst",
+          tools: ["bash"],
+          prompt: "Inspect failures.",
+          infer: true
+        },
+        {
+          name: "architecture-analyst",
+          tools: ["bash"],
+          prompt: "Inspect architecture.",
+          infer: true
+        }
+      ]
+    });
+
+    const args = mockState.createSessionArgs[0] ?? {};
+    const hooks = args.hooks as {
+      onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => unknown;
+    };
+    const onEvent = args.onEvent as (event: unknown) => void;
+
+    onEvent({ type: "subagent.started", agentId: "failure-1", data: { agentName: "failure-analyst" } });
+    onEvent({ type: "subagent.started", agentId: "architecture-1", data: { agentName: "architecture-analyst" } });
+    onEvent({ type: "subagent.completed", agentId: "architecture-1", data: { agentName: "architecture-analyst" } });
+
+    expect(
+      hooks.onPreToolUse({
+        toolName: "bash",
+        toolArgs: { command: "grep -n fail session-2.md" }
+      })
+    ).toBeUndefined();
+
+    onEvent({ type: "subagent.completed", agentId: "failure-1", data: { agentName: "failure-analyst" } });
+    onEvent({ type: "subagent.completed", data: { agentName: "timeline-analyst" } });
+
+    expect(
+      hooks.onPreToolUse({
+        toolName: "bash",
+        toolArgs: { command: "grep -n fail session-2.md" }
+      })
+    ).toMatchObject({ permissionDecision: "deny" });
+  });
+
+  it("waits for a slot before allowing new task/delegate launches at max parallelism", async () => {
+    const provider = new CopilotSdkProvider({
+      model: "gpt-5",
+      requestTimeoutMs: 1000,
+      maxSubagentParallelism: 1,
+      clientOptions: { useLoggedInUser: false },
+      sessionConfig: {
+        workingDirectory: process.cwd()
+      }
+    });
+
+    await provider.runAgent("analyze", [], {
+      customAgents: [
+        {
+          name: "failure-analyst",
+          tools: ["read_file"],
+          prompt: "Inspect failures.",
+          infer: true
+        },
+        {
+          name: "architecture-analyst",
+          tools: ["read_file"],
+          prompt: "Inspect architecture.",
+          infer: true
+        }
+      ]
+    });
+
+    const args = mockState.createSessionArgs[0] ?? {};
+    const hooks = args.hooks as {
+      onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => unknown;
+    };
+    const onEvent = args.onEvent as (event: unknown) => void;
+
+    onEvent({ type: "subagent.started", agentId: "failure-1", data: { agentName: "failure-analyst" } });
+
+    let released = false;
+    const waitingLaunch = Promise.resolve(
+      hooks.onPreToolUse({
+        toolName: "task",
+        toolArgs: { agent_type: "architecture-analyst", prompt: "Inspect architecture choices." }
+      })
+    ).then((result) => {
+      released = true;
+      return result;
+    });
+
+    await Promise.resolve();
+    expect(released).toBe(false);
+
+    onEvent({ type: "subagent.completed", agentId: "failure-1", data: { agentName: "failure-analyst" } });
+    onEvent({ type: "subagent.completed", data: { agentName: "timeline-analyst" } });
+
+    await waitingLaunch;
+    expect(released).toBe(true);
+  });
+
+  it("queues same-turn burst delegations when max subagent parallelism is one", async () => {
+    const provider = new CopilotSdkProvider({
+      model: "gpt-5",
+      requestTimeoutMs: 1000,
+      maxSubagentParallelism: 1,
+      clientOptions: { useLoggedInUser: false },
+      sessionConfig: {
+        workingDirectory: process.cwd()
+      }
+    });
+
+    await provider.runAgent("analyze", [], {
+      customAgents: [
+        {
+          name: "behavior-analyst",
+          tools: ["read_file"],
+          prompt: "Inspect behavior.",
+          infer: true
+        },
+        {
+          name: "architecture-analyst",
+          tools: ["read_file"],
+          prompt: "Inspect architecture.",
+          infer: true
+        }
+      ]
+    });
+
+    const args = mockState.createSessionArgs[0] ?? {};
+    const hooks = args.hooks as {
+      onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => unknown;
+    };
+    const onEvent = args.onEvent as (event: unknown) => void;
+
+    onEvent({ type: "subagent.completed", data: { agentName: "timeline-analyst" } });
+
+    await expect(
+      Promise.resolve(
+        hooks.onPreToolUse({
+          toolName: "task",
+          toolArgs: { agent_type: "behavior-analyst", prompt: "Inspect communication behavior." }
+        })
+      )
+    ).resolves.toBeUndefined();
+
+    let released = false;
+    const queuedLaunch = Promise.resolve(
+      hooks.onPreToolUse({
+        toolName: "task",
+        toolArgs: { agent_type: "architecture-analyst", prompt: "Inspect architecture choices." }
+      })
+    ).then((result) => {
+      released = true;
+      return result;
+    });
+
+    await Promise.resolve();
+    expect(released).toBe(false);
+
+    onEvent({ type: "subagent.started", agentId: "behavior-1", data: { agentName: "behavior-analyst" } });
+    onEvent({ type: "subagent.completed", agentId: "behavior-1", data: { agentName: "behavior-analyst" } });
+
+    await queuedLaunch;
+    expect(released).toBe(true);
   });
 });

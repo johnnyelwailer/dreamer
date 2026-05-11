@@ -118,6 +118,7 @@ export class SignalStage implements PipelineStage {
           retries: [
             `Continue only on ${sessionFile}. Delegate evidence inspection with the task tool using agent_type explore, behavior-analyst, architecture-analyst, or failure-analyst. Do not call read_agent with guessed IDs. Call record_insight for any remaining durable findings, then call finalize_signal_extraction before finishing.`
           ],
+          shouldRetry: () => !finalVerdict.current,
           customAgents: sessionCustomAgents,
           defaultAgent: this.agentPack?.defaultAgent
         };

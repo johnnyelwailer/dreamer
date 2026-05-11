@@ -95,6 +95,10 @@ function buildSessionProviderConfig(runtime: RuntimeManifest): ProviderConfig | 
   return provider;
 }
 
+function resolveMaxSubagentParallelism(runtime: RuntimeManifest): number | undefined {
+  return readPositiveIntEnv("COPILOT_SDK_MAX_SUBAGENT_PARALLELISM") ?? runtime.provider.sdk.maxSubagentParallelism;
+}
+
 export function buildCopilotSdkProviderOptions(
   runtime: RuntimeManifest,
   model: string,
@@ -134,6 +138,7 @@ export function buildCopilotSdkProviderOptions(
   return {
     model,
     requestTimeoutMs: sdk.requestTimeoutMs,
+    maxSubagentParallelism: resolveMaxSubagentParallelism(runtime),
     clientOptions,
     sessionConfig
   };

@@ -40,33 +40,58 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-function mergeBundledAgentPacks(parsed: unknown): unknown {
+function mergeToolLists(first: unknown, second: unknown): string[] | undefined {
+  if (!Array.isArray(first) && !Array.isArray(second)) return undefined;
+  return [...new Set([...(Array.isArray(first) ? first : []), ...(Array.isArray(second) ? second : [])])]
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function mergeBundledAgentPacks(parsed: unknown, mergeDefaults: boolean): unknown {
   const root = asRecord(parsed);
   const pipeline = asRecord(root?.pipeline);
-  if (!root || !pipeline || pipeline.agentPacks !== undefined) return parsed;
+  if (!root || !pipeline) return parsed;
 
   const defaults = asRecord(JSON.parse(readFileSync(resolveAssetPath("runtime-defaults.json"), "utf8")) as unknown);
   const defaultPipeline = asRecord(defaults?.pipeline);
-  if (defaultPipeline?.agentPacks === undefined) return parsed;
+  const bundledPacks = asRecord(defaultPipeline?.agentPacks);
+  if (!bundledPacks) return parsed;
+  if (pipeline.agentPacks === undefined) {
+    return { ...root, pipeline: { ...pipeline, agentPacks: bundledPacks } };
+  }
+  if (!mergeDefaults) return parsed;
+
+  const localPacks = asRecord(pipeline.agentPacks);
+  if (!localPacks) return parsed;
+  const agentPacks: Record<string, unknown> = { ...localPacks };
+  for (const [stageId, bundledPack] of Object.entries(bundledPacks)) {
+    const bundled = asRecord(bundledPack);
+    const local = asRecord(localPacks[stageId]);
+    if (!bundled || !local) continue;
+    const bundledDefault = asRecord(bundled.defaultAgent);
+    const localDefault = asRecord(local.defaultAgent);
+    const excludedTools = mergeToolLists(bundledDefault?.excludedTools, localDefault?.excludedTools);
+    agentPacks[stageId] = excludedTools ? { ...local, defaultAgent: { ...localDefault, excludedTools } } : local;
+  }
 
   return {
     ...root,
     pipeline: {
       ...pipeline,
-      agentPacks: defaultPipeline.agentPacks
+      agentPacks
     }
   };
 }
 
 export function readRuntimeManifest(workspaceDir: string): RuntimeManifest {
   const path = runtimeManifestPath(workspaceDir);
+  const explicitRuntimeFile = Boolean(process.env.DREAM_RUNTIME_CONFIG_FILE?.trim());
   let raw: string;
   try {
     raw = readFileSync(path, "utf8");
   } catch {
     raw = readFileSync(resolveAssetPath("runtime-defaults.json"), "utf8");
   }
-  const parsed = mergeBundledAgentPacks(JSON.parse(raw) as unknown);
+  const parsed = mergeBundledAgentPacks(JSON.parse(raw) as unknown, !explicitRuntimeFile);
   return parseRuntimeManifestObject(parsed);
 }
 

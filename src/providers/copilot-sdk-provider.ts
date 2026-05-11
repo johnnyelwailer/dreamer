@@ -23,6 +23,7 @@ type CopilotSession = {
 export type CopilotSdkProviderOptions = {
   model: string;
   requestTimeoutMs: number;
+  maxSubagentParallelism?: number;
   clientOptions: Pick<
     CopilotClientOptions,
     "useLoggedInUser" | "gitHubToken" | "cliPath" | "cliUrl" | "env" | "onListModels"
@@ -107,7 +108,8 @@ export class CopilotSdkProvider implements IntelligenceProvider {
     const guard = createAgentToolGuard({
       allowedTaskAgentTypes: options.customAgents?.map((agent) => agent.name),
       defaultAgentExcludedTools: options.defaultAgent?.excludedTools,
-      initialAgent: options.selectedAgent
+      initialAgent: options.selectedAgent,
+      maxParallelSubagents: options.maxSubagentParallelism ?? this.options.maxSubagentParallelism
     });
 
     try {
@@ -127,9 +129,12 @@ export class CopilotSdkProvider implements IntelligenceProvider {
         tools: tools as Parameters<typeof client.createSession>[0]["tools"]
       })) as CopilotSession;
 
-      let lastOutput = "";
-      for (const p of [prompt, ...(options.retries ?? [])]) {
-        lastOutput = extractAssistantText(await session.sendAndWait({ prompt: p }, this.options.requestTimeoutMs));
+      let lastOutput = extractAssistantText(await session.sendAndWait({ prompt }, this.options.requestTimeoutMs));
+      const retries = options.retries ?? [];
+      for (const [retryIndex, retryPrompt] of retries.entries()) {
+        const shouldRetry = await options.shouldRetry?.({ retryPrompt, retryIndex, lastOutput });
+        if (shouldRetry === false) break;
+        lastOutput = extractAssistantText(await session.sendAndWait({ prompt: retryPrompt }, this.options.requestTimeoutMs));
       }
       return lastOutput;
     } catch (error) {

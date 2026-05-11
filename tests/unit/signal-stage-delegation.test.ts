@@ -28,6 +28,18 @@ const MAIN_SIGNAL_EXCLUDED_TOOLS = [
   "file_search",
   "semantic_search",
   "list_dir",
+  "create",
+  "create_file",
+  "write",
+  "write_file",
+  "edit",
+  "edit_file",
+  "rename",
+  "rename_file",
+  "delete",
+  "delete_file",
+  "replace_string_in_file",
+  "multi_replace_string_in_file",
   "run_in_terminal",
   "send_to_terminal",
   "get_terminal_output",
@@ -180,6 +192,7 @@ describe("SignalStage delegated mode", () => {
     expect(provider.calls[0]?.prompt).toContain("Your first evidence step must be native delegation with the `task` tool");
     expect(provider.calls[0]?.prompt).toContain("Use only these `agent_type` values: `explore`, `behavior-analyst`");
     expect(provider.calls[0]?.prompt).toContain("Do not use `general-purpose`, `read_agent`, `bash`, `list_bash`, `write_bash`, `glob`, `grep`, `search`");
+    expect(provider.calls[0]?.prompt).toContain("`create`, `write`, `edit`, `delete`");
   });
 
   it("loads packaged signal agent prompts when workspace templates are absent", async () => {

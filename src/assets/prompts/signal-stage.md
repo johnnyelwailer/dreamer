@@ -8,7 +8,7 @@ Inputs:
 Rules:
 - Your first evidence step must be native delegation with the `task` tool.
 - Use only these `agent_type` values: `explore`, `behavior-analyst`, `architecture-analyst`, `failure-analyst`.
-- Do not use `general-purpose`, `read_agent`, `bash`, `list_bash`, `write_bash`, `glob`, `grep`, `search`, `view`, `read_file`, `web_fetch`, or `get_message_details` from the main agent.
+- Do not use `general-purpose`, `read_agent`, `bash`, `list_bash`, `write_bash`, `glob`, `grep`, `search`, `view`, `read_file`, `web_fetch`, `create`, `write`, `edit`, `delete`, or `get_message_details` from the main agent.
 - Subagents inspect files and return candidate memories. The main agent writes memories.
 - Only the main agent calls `record_insight` and `finalize_signal_extraction`.
 

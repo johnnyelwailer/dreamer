@@ -39,11 +39,15 @@ export async function runConsolidationAgentPasses(
   prompt: string,
   tools: unknown[],
   agentPack: RuntimeStageAgentPackConfig | undefined,
-  customAgents: RunAgentCustomAgentConfig[] | undefined
+  customAgents: RunAgentCustomAgentConfig[] | undefined,
+  shouldRetry?: () => boolean | Promise<boolean>
 ): Promise<void> {
   const runOptions = {
     streamTag: "consolidation main",
     retries: [CONSOLIDATION_RETRY],
+    shouldRetry: shouldRetry
+      ? async () => await shouldRetry()
+      : undefined,
     customAgents,
     defaultAgent: agentPack?.defaultAgent
   };

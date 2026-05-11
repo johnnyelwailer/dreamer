@@ -91,6 +91,10 @@ export function parseRuntimeManifestObject(parsed: unknown): RuntimeManifest {
         authMode: asEnum(sdk.authMode, ["none", "logged-in-user", "github-token", "session-github-token"] as const, "provider.sdk.authMode"),
         providerMode: asEnum(sdk.providerMode, ["copilot", "byok"] as const, "provider.sdk.providerMode"),
         requestTimeoutMs: asPositiveInteger(sdk.requestTimeoutMs, "provider.sdk.requestTimeoutMs"),
+        maxSubagentParallelism:
+          sdk.maxSubagentParallelism === undefined
+            ? undefined
+            : asPositiveInteger(sdk.maxSubagentParallelism, "provider.sdk.maxSubagentParallelism"),
         infiniteSessionsEnabled:
           sdk.infiniteSessionsEnabled === undefined
             ? undefined

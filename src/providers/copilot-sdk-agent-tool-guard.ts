@@ -5,6 +5,8 @@ import {
   type ToolResultObject
 } from "@github/copilot-sdk";
 import { extractReturnedShellIds } from "./copilot-sdk-shell-ids.js";
+import { isSubagentStartEvent, isSubagentTerminalEvent } from "./copilot-sdk-stream-event-helpers.js";
+import { createSubagentState } from "./copilot-sdk-subagent-state.js";
 import { describeTaskArgs, normalizeTaskArgs, readTaskAgentType } from "./copilot-sdk-task-args.js";
 
 type ToolHookInput = {
@@ -22,6 +24,15 @@ export type AgentToolGuard = {
           additionalContext?: string;
           modifiedArgs?: unknown;
         }
+      | Promise<
+          | {
+              permissionDecision: "allow" | "deny";
+              permissionDecisionReason?: string;
+              additionalContext?: string;
+              modifiedArgs?: unknown;
+            }
+          | undefined
+        >
       | undefined;
     onPostToolUse: (input: ToolHookInput) => undefined;
   };
@@ -33,9 +44,9 @@ type GuardOptions = {
   allowedTaskAgentTypes?: Iterable<string>;
   defaultAgentExcludedTools?: Iterable<string>;
   initialAgent?: string;
+  maxParallelSubagents?: number;
 };
 
-type EventRecord = { type?: string; data?: Record<string, unknown> };
 type PermissionRequestRecord = PermissionRequest & { toolName?: string };
 const ALLOWED_BUILTIN_TASK_AGENTS = ["explore"];
 
@@ -47,18 +58,6 @@ function readStringField(value: unknown, key: string): string | undefined {
   if (!value || typeof value !== "object") return undefined;
   const field = (value as Record<string, unknown>)[key];
   return typeof field === "string" && field.trim() ? field.trim() : undefined;
-}
-
-function readEventAgentName(event: unknown): string | undefined {
-  const data = ((event ?? {}) as EventRecord).data ?? {};
-  const candidates = [
-    data.agentName,
-    data.subagentName,
-    data.targetAgent,
-    (data.subagent as Record<string, unknown> | undefined)?.name,
-    (data.agent as Record<string, unknown> | undefined)?.name
-  ];
-  return candidates.find((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0)?.trim();
 }
 
 function permissionToolName(request: PermissionRequest): string | undefined {
@@ -76,7 +75,23 @@ export function createAgentToolGuard(options: GuardOptions = {}): AgentToolGuard
     configuredAgents.length > 0 ? [...ALLOWED_BUILTIN_TASK_AGENTS.map(normalize), ...configuredAgents] : []
   );
   const blockedDefaultTools = new Set([...(options.defaultAgentExcludedTools ?? [])].map(normalize).filter(Boolean));
-  let currentAgent = options.initialAgent?.trim() || undefined;
+  const subagents = createSubagentState(options.initialAgent);
+  const maxParallelSubagents =
+    typeof options.maxParallelSubagents === "number" && Number.isInteger(options.maxParallelSubagents) && options.maxParallelSubagents > 0
+      ? options.maxParallelSubagents
+      : undefined;
+  let reservedSubagentLaunches = 0;
+  const waitingLaunchResolvers: Array<() => void> = [];
+
+  const currentInFlightSubagents = () => subagents.activeCount() + reservedSubagentLaunches;
+
+  const grantWaitingLaunches = () => {
+    if (!maxParallelSubagents) return;
+    while (waitingLaunchResolvers.length > 0 && currentInFlightSubagents() < maxParallelSubagents) {
+      reservedSubagentLaunches += 1;
+      waitingLaunchResolvers.shift()?.();
+    }
+  };
 
   const denyTask = (agentType: string | undefined, taskArgs: unknown) => {
     if (allowedAgents.size === 0 || (agentType && allowedAgents.has(normalize(agentType)))) return undefined;
@@ -89,12 +104,23 @@ export function createAgentToolGuard(options: GuardOptions = {}): AgentToolGuard
   };
 
   const denyDefaultTool = (toolName: string | undefined) => {
-    if (!toolName || currentAgent || !blockedDefaultTools.has(normalize(toolName))) return undefined;
+    if (!toolName || subagents.isActive() || !blockedDefaultTools.has(normalize(toolName))) return undefined;
     return {
       permissionDecision: "deny" as const,
       permissionDecisionReason: `The default stage agent cannot call ${toolName} directly.`,
-      additionalContext: "Delegate evidence inspection to a configured specialist subagent."
+      additionalContext: `Delegate evidence inspection to a configured specialist subagent. Active subagents: ${subagents.describe()}.`
     };
+  };
+
+  const reserveLaunchSlot = (toolName: string): Promise<void> | undefined => {
+    if ((toolName !== "task" && toolName !== "delegate") || !maxParallelSubagents) return undefined;
+    if (currentInFlightSubagents() < maxParallelSubagents) {
+      reservedSubagentLaunches += 1;
+      return undefined;
+    }
+    return new Promise<void>((resolve) => {
+      waitingLaunchResolvers.push(resolve);
+    });
   };
 
   return {
@@ -105,7 +131,13 @@ export function createAgentToolGuard(options: GuardOptions = {}): AgentToolGuard
           const taskArgs = normalizeTaskArgs(input.toolArgs);
           const denied = denyTask(readTaskAgentType(taskArgs), taskArgs);
           if (denied) return denied;
-          if (taskArgs !== input.toolArgs) return { permissionDecision: "allow" as const, modifiedArgs: taskArgs };
+          const complete = () => {
+            if (taskArgs !== input.toolArgs) return { permissionDecision: "allow" as const, modifiedArgs: taskArgs };
+            return undefined;
+          };
+          const waitForSlot = reserveLaunchSlot(toolName);
+          if (waitForSlot) return waitForSlot.then(() => complete());
+          return complete();
         }
         const denied = denyDefaultTool(input.toolName);
         if (denied) return denied;
@@ -115,17 +147,28 @@ export function createAgentToolGuard(options: GuardOptions = {}): AgentToolGuard
         return { permissionDecision: "deny" as const, permissionDecisionReason: "read_bash requires a real shellId returned by a previous bash call." };
       },
       onPostToolUse: (input) => {
-        if (normalize(input.toolName) === "bash" && input.toolResult?.resultType === "success") {
+        const toolName = normalize(input.toolName);
+        if (
+          (toolName === "task" || toolName === "delegate")
+          && input.toolResult?.resultType === "error"
+          && reservedSubagentLaunches > 0
+        ) {
+          reservedSubagentLaunches -= 1;
+          grantWaitingLaunches();
+        }
+        if (toolName === "bash" && input.toolResult?.resultType === "success") {
           for (const id of extractReturnedShellIds(input.toolResult)) activeShellIds.add(id);
         }
         return undefined;
       }
     },
     onEvent: (event) => {
-      const type = ((event ?? {}) as EventRecord).type?.toLowerCase() ?? "";
-      const agentName = readEventAgentName(event);
-      if ((type === "subagent.selected" || type === "subagent.started") && agentName) currentAgent = agentName;
-      if (type === "subagent.deselected" || type === "subagent.completed") currentAgent = undefined;
+      subagents.onEvent(event);
+      const type = ((event ?? {}) as { type?: string }).type?.toLowerCase() ?? "";
+      if (isSubagentStartEvent(type) && reservedSubagentLaunches > 0) reservedSubagentLaunches -= 1;
+      if (isSubagentTerminalEvent(type) || isSubagentStartEvent(type)) {
+        grantWaitingLaunches();
+      }
     },
     onPermissionRequest: (request, invocation) => {
       const toolName = permissionToolName(request);
