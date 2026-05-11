@@ -55,14 +55,14 @@ export function createInkEventHandlers(verbose: boolean, store: Store, state: St
   }
 
   function handleVerboseEvents(record: CopilotEvent, type: string): void {
-    if (\!verbose) return;
+    if (!verbose) return;
 
     if (type.includes("reasoning") || hasReasoningPayload(record)) {
       verboseHandlers.handleReasoning(record);
       if (type.includes("reasoning")) return;
     }
 
-    if (type === "assistant.message" && \!hasReasoningPayload(record)) {
+    if (type === "assistant.message" && !hasReasoningPayload(record)) {
       verboseHandlers.handleIntent(record);
       return;
     }
