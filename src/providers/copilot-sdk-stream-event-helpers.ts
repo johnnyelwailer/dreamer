@@ -55,7 +55,7 @@ export function isToolStart(type: string): boolean {
 }
 
 export function isToolComplete(type: string): boolean {
-  return type === "tool.execution_complete" || /tool\..*(complete|finish|done|end)$/i.test(type);
+  return type === "tool.execution_complete" || /tool\..*(complete|finish|done|end|fail(?:ed)?|error(?:ed)?|cancel(?:led)?|abort(?:ed)?|stop(?:ped)?|terminate(?:d)?|reject(?:ed)?)$/i.test(type);
 }
 
 export function getToolSuccess(record: CopilotEvent): boolean | undefined {
@@ -76,7 +76,15 @@ export function delegationPhase(type: string): "start" | "done" | "failed" | und
   const value = type.toLowerCase();
   if (!value.includes("subagent") && !value.includes("delegat")) return undefined;
   if (value.includes("start") || value.includes("begin") || value.includes("created")) return "start";
-  if (value.includes("fail") || value.includes("error")) return "failed";
+  if (
+    value.includes("fail")
+    || value.includes("error")
+    || value.includes("cancel")
+    || value.includes("abort")
+    || value.includes("reject")
+  ) {
+    return "failed";
+  }
   if (value.includes("done") || value.includes("complete") || value.includes("finish") || value.includes("success")) return "done";
   return undefined;
 }
@@ -88,7 +96,19 @@ export function isSubagentStartEvent(type: string): boolean {
 
 export function isSubagentTerminalEvent(type: string): boolean {
   const value = type.toLowerCase();
-  return value.includes("subagent") && (value.includes("done") || value.includes("complete") || value.includes("finish") || value.includes("success") || value.includes("fail") || value.includes("error"));
+  return value.includes("subagent") && (
+    value.includes("done")
+    || value.includes("complete")
+    || value.includes("finish")
+    || value.includes("success")
+    || value.includes("fail")
+    || value.includes("error")
+    || value.includes("cancel")
+    || value.includes("abort")
+    || value.includes("reject")
+    || value.includes("terminate")
+    || value.includes("stop")
+  );
 }
 
 export function delegatedAgentName(record: CopilotEvent): string {
@@ -101,8 +121,6 @@ export function eventSubagentName(record: CopilotEvent): string | undefined {
     data.agentName,
     data.subagentName,
     data.targetAgent,
-    data.agent,
-    data.name,
     (data.subagent as Record<string, unknown> | undefined)?.name,
     (data.agent as Record<string, unknown> | undefined)?.name
   ];

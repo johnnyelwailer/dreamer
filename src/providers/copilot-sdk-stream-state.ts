@@ -6,6 +6,7 @@ type PendingTool = {
   args: string;
   argsLines: string[];
   tag: string;
+  activityId?: string;
 };
 
 type DelegationRequest = { argsPreview: string };
@@ -18,10 +19,19 @@ export function createStreamState(agentTag: string) {
   const agentIdToName = new Map<string, string>();
 
   function delegatedSuffix(record: CopilotEvent): string | undefined {
-    const delegated = eventSubagentName(record);
-    if (delegated?.trim()) return delegated.trim();
+    const type = String(record.type ?? "").toLowerCase();
+    if (type.startsWith("subagent.")) {
+      const delegated = eventSubagentName(record);
+      if (delegated?.trim()) return delegated.trim();
+    }
     const agentId = typeof record.agentId === "string" ? record.agentId.trim() : "";
-    return agentId ? agentIdToName.get(agentId) : undefined;
+    if (!agentId) return undefined;
+    const mapped = agentIdToName.get(agentId);
+    return mapped?.trim() ? mapped.trim() : undefined;
+  }
+
+  function isDelegated(record: CopilotEvent): boolean {
+    return Boolean(delegatedSuffix(record));
   }
 
   function delegationRequestId(record: CopilotEvent): string | undefined {
@@ -40,8 +50,11 @@ export function createStreamState(agentTag: string) {
     },
     toolTagFor(toolName: string, record: CopilotEvent): string {
       const delegated = delegatedSuffix(record);
-      return delegated ? `${toolName}@${delegated}` : toolName;
+      if (delegated) return `${toolName}@${delegated}`;
+      if (agentTag && agentTag !== "dream agent") return `${toolName}@${agentTag}`;
+      return toolName;
     },
+    isDelegated,
     rememberDelegationRequest(record: CopilotEvent, toolName: string): void {
       if (toolName !== "task" && toolName !== "delegate") return;
       const argsPreview = buildToolArgsPreview(record.data);

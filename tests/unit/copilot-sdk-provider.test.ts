@@ -24,7 +24,10 @@ vi.mock("@github/copilot-sdk", () => {
         sendAndWait: async (request: { prompt: string }) => {
           mockState.prompts.push(request.prompt);
           const onEvent = args.onEvent as ((event: unknown) => void) | undefined;
-          if (args.customAgents) onEvent?.({ type: "subagent.started", data: { agentName: "timeline-analyst" } });
+          if (args.customAgents) {
+            onEvent?.({ type: "subagent.started", agentId: "timeline-1", data: { agentName: "timeline-analyst" } });
+            onEvent?.({ type: "subagent.completed", agentId: "timeline-1", data: { agentName: "timeline-analyst" } });
+          }
           return { data: { content: "ok" } };
         }
       };
@@ -57,7 +60,7 @@ describe("CopilotSdkProvider.runAgent", () => {
     });
 
     const events: unknown[] = [];
-    await provider.runAgent("analyze", [], {
+    await provider.runAgent("analyze", [{ name: "record_insight" }], {
       workingDirectory: "/tmp/work",
       retries: ["retry"],
       selectedAgent: "timeline-analyst",
@@ -86,8 +89,32 @@ describe("CopilotSdkProvider.runAgent", () => {
         infer: true
       }
     ]);
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(4);
     expect(mockState.prompts).toEqual(["analyze", "retry"]);
+  });
+
+  it("filters unknown excludedTools before sending defaultAgent config to the SDK", async () => {
+    const provider = new CopilotSdkProvider({
+      model: "gpt-5",
+      requestTimeoutMs: 1000,
+      clientOptions: { useLoggedInUser: false },
+      sessionConfig: {
+        workingDirectory: process.cwd()
+      }
+    });
+
+    await provider.runAgent(
+      "analyze",
+      [{ name: "record_insight" }],
+      {
+        defaultAgent: {
+          excludedTools: ["record_insight", "bash", "search", "grep_search", "run_in_terminal"]
+        }
+      }
+    );
+
+    const args = mockState.createSessionArgs[0] ?? {};
+    expect(args.defaultAgent).toEqual({ excludedTools: ["record_insight", "bash"] });
   });
 
   it("only sends retry prompts when shouldRetry returns true", async () => {
@@ -316,6 +343,9 @@ describe("CopilotSdkProvider.runAgent", () => {
     const hooks = args.hooks as {
       onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => unknown;
     };
+    const onEvent = args.onEvent as (event: unknown) => void;
+
+    onEvent({ type: "subagent.started", agentId: "timeline-2", data: { agentName: "timeline-analyst" } });
 
     expect(
       hooks.onPreToolUse({

@@ -78,4 +78,28 @@ describe("runSetupWizard", () => {
     expect(envLocal).toContain("COPILOT_SDK_MAX_SUBAGENT_PARALLELISM=2");
     expect(envLocal).toContain("DREAM_PLUGIN_PATHS=./plugins/custom.ts");
   });
+
+  it("defaults max prompt tokens to context length when prompt tokens are omitted", async () => {
+    const workspaceDir = await tempWorkspace();
+
+    await runSetupWizard(workspaceDir, {
+      yes: true,
+      adapter: "adapter.jsonl.event",
+      backend: "backend.copilot.memory",
+      providerMode: "byok",
+      authMode: "none",
+      model: "gpt-4o-mini",
+      baseUrl: "http://localhost:11434/v1",
+      apiKey: "local-token",
+      contextLength: "32768",
+      maxSubagentParallelism: "2",
+      pluginPath: ["./plugins/custom.ts"],
+      stageOrder: "stage.orientation,stage.signal,stage.observability",
+      verify: false
+    });
+
+    const envLocal = await readFile(join(workspaceDir, ".env.local"), "utf8");
+    expect(envLocal).toContain("COPILOT_SDK_MAX_CONTEXT_WINDOW_TOKENS=32768");
+    expect(envLocal).toContain("COPILOT_SDK_MAX_PROMPT_TOKENS=32768");
+  });
 });

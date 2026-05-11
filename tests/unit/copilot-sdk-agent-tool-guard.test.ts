@@ -60,4 +60,39 @@ describe("createAgentToolGuard maxParallelSubagents", () => {
     await queued;
     expect(released).toBe(true);
   });
+
+  it("denies excluded tools for the default stage agent", async () => {
+    const guard = createAgentToolGuard({
+      defaultAgentExcludedTools: ["read_file"]
+    });
+
+    const result = await Promise.resolve(
+      guard.hooks.onPreToolUse({
+        toolName: "read_file",
+        toolArgs: { path: "session-1.md" }
+      })
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        permissionDecision: "deny"
+      })
+    );
+  });
+
+  it("allows excluded tools for an explicitly selected specialist agent", async () => {
+    const guard = createAgentToolGuard({
+      defaultAgentExcludedTools: ["read_file"],
+      initialAgent: "behavior-analyst"
+    });
+
+    const result = await Promise.resolve(
+      guard.hooks.onPreToolUse({
+        toolName: "read_file",
+        toolArgs: { path: "session-2.md" }
+      })
+    );
+
+    expect(result).toBeUndefined();
+  });
 });

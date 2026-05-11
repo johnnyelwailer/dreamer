@@ -75,7 +75,12 @@ export function envWrites(answers: SetupAnswers): EnvWrite[] {
   if (answers.authMode === "github-token") writes.push({ name: "GITHUB_TOKEN", value: "" });
   if (answers.authMode === "session-github-token") writes.push({ name: "COPILOT_SDK_SESSION_GITHUB_TOKEN", value: "" });
   if (answers.contextLength) writes.push({ name: "COPILOT_SDK_MAX_CONTEXT_WINDOW_TOKENS", value: String(answers.contextLength) });
-  if (answers.promptTokens) writes.push({ name: "COPILOT_SDK_MAX_PROMPT_TOKENS", value: String(answers.promptTokens) });
+  if (answers.promptTokens ?? answers.contextLength) {
+    writes.push({
+      name: "COPILOT_SDK_MAX_PROMPT_TOKENS",
+      value: String(answers.promptTokens ?? answers.contextLength)
+    });
+  }
   if (answers.maxSubagentParallelism) {
     writes.push({ name: "COPILOT_SDK_MAX_SUBAGENT_PARALLELISM", value: String(answers.maxSubagentParallelism) });
   }

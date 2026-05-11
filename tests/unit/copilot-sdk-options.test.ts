@@ -61,11 +61,20 @@ describe("buildCopilotSdkProviderOptions", () => {
     delete process.env.COPILOT_SDK_MAX_SUBAGENT_PARALLELISM;
     delete process.env.COPILOT_SDK_STREAMING;
     delete process.env.COPILOT_SDK_INCLUDE_SUBAGENT_STREAMING_EVENTS;
+    delete process.env.COPILOT_SDK_ENABLE_CONFIG_DISCOVERY;
+    delete process.env.COPILOT_SDK_SKILL_DIRECTORIES;
+    delete process.env.COPILOT_SDK_DISABLED_SKILLS;
   });
 
   it("enables infinite sessions by default", () => {
     const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
     expect(options.sessionConfig.infiniteSessions).toEqual({ enabled: true });
+  });
+
+  it("does not force SDK config discovery controls by default", () => {
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
+    expect(options.sessionConfig.enableConfigDiscovery).toBeUndefined();
+    expect(options.sessionConfig.skillDirectories).toBeUndefined();
   });
 
   it("honors runtime infiniteSessionsEnabled when true", () => {
@@ -111,12 +120,32 @@ describe("buildCopilotSdkProviderOptions", () => {
     expect(options.sessionConfig.modelCapabilities).toBeUndefined();
   });
 
+  it("defaults max prompt tokens to max context window when prompt tokens are not set", () => {
+    process.env.COPILOT_SDK_MAX_CONTEXT_WINDOW_TOKENS = "64000";
+    delete process.env.COPILOT_SDK_MAX_PROMPT_TOKENS;
+
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
+    expect(options.sessionConfig.modelCapabilities?.limits?.max_context_window_tokens).toBe(64000);
+    expect(options.sessionConfig.modelCapabilities?.limits?.max_prompt_tokens).toBe(64000);
+  });
+
   it("applies streaming env toggles", () => {
     process.env.COPILOT_SDK_STREAMING = "true";
     process.env.COPILOT_SDK_INCLUDE_SUBAGENT_STREAMING_EVENTS = "0";
     const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
     expect(options.sessionConfig.streaming).toBe(true);
     expect(options.sessionConfig.includeSubAgentStreamingEvents).toBe(false);
+  });
+
+  it("maps official SDK skill discovery controls from env", () => {
+    process.env.COPILOT_SDK_ENABLE_CONFIG_DISCOVERY = "false";
+    process.env.COPILOT_SDK_SKILL_DIRECTORIES = "/tmp/skills-a,/tmp/skills-b";
+    process.env.COPILOT_SDK_DISABLED_SKILLS = "customize-cloud-agent;my-skill";
+
+    const options = buildCopilotSdkProviderOptions(createRuntimeManifest(), "gpt-5", process.cwd());
+    expect(options.sessionConfig.enableConfigDiscovery).toBe(false);
+    expect(options.sessionConfig.skillDirectories).toEqual(["/tmp/skills-a", "/tmp/skills-b"]);
+    expect(options.sessionConfig.disabledSkills).toEqual(["customize-cloud-agent", "my-skill"]);
   });
 
   it("resolves max subagent parallelism from runtime and allows env override", () => {

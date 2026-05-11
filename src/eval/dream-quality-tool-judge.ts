@@ -75,7 +75,11 @@ export async function runToolContractJudge(input: ToolJudgeInput): Promise<ToolJ
       onPermissionRequest: guard.onPermissionRequest,
       hooks: guard.hooks,
       onEvent: (event) => {
-        streamHandler?.(event);
+          try {
+            streamHandler?.(event);
+          } catch {
+            // Stream rendering is best-effort and must not affect judge lifecycle.
+          }
         streamEventCount += 1;
         if (event.type === "assistant.message_delta" || event.type === "assistant.streaming_delta") {
           streamDeltaCount += 1;

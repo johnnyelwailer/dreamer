@@ -6,6 +6,7 @@ New insights extracted this run:
 {{insights}}
 
 Use specialist agents to gather the information needed to integrate these into the memory store:
+0. Your first evidence step must be specialist review, either via orchestrator-run specialist passes or native delegation with the `task` tool.
 1. Delegate to specialist agents to call list_memories and summarize what already exists
 2. Have specialist agents review the full memory store, not just new insights. They should perform a hygiene pass across every existing memory:
    - validate stale or suspicious memories against their references with read_reference
@@ -24,6 +25,9 @@ If specialist agents are available, delegate:
 - existing-memory inventory, deduplication, and broad/narrow cleanup to `memory-inventory-reviewer`
 - contradiction/scope classification to `contradiction-scope-reviewer`
 - source/reference validation for risky changes to `reference-validator`
+
+Use only these `agent_type` values: `explore`, `memory-inventory-reviewer`, `contradiction-scope-reviewer`, `reference-validator`.
+Do not infer that specialists are unavailable just because `list_agents` reports no background agents. Custom specialist agents are invoked through the `task` tool for this stage.
 
 Only the main consolidation agent should call `write_memory`, `remove_memory`, and `finalize_consolidation`. Specialist agents must inspect sources and return summaries/recommendations for the main agent to apply. The main consolidation agent should not call file, shell, list, or reference-inspection tools directly; delegate another specialist pass if more evidence is needed.
 Do not use a specialist as a memory writer. Specialists return action plans; the main consolidation agent applies final changes.

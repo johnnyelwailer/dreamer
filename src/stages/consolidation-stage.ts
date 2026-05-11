@@ -115,7 +115,7 @@ export class ConsolidationStage implements PipelineStage {
     if (!hasFinalVerdict()) {
       context.diary.push("consolidation:missing_final_verdict=1");
       context.diary.push("consolidation:user_message=Consolidation must call finalize_consolidation to finish.");
-      return context;
+      throw new Error("consolidation stage missing required finalize_consolidation");
     }
 
     const finalVerdict = getFinalVerdict();

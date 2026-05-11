@@ -46,6 +46,7 @@
             "read_bash",
             "view",
             "read_agent",
+            "skill",
             "web_fetch",
             "report_intent",
             "glob",
@@ -116,7 +117,15 @@
             "promptTemplatePath": "prompts/stages/signal/agents/failure-analyst.md",
             "infer": true
           }
-        ]
+        ],
+        "execution": {
+          "mode": "explicit-sequence",
+          "explicitSequence": [
+            "behavior-analyst",
+            "architecture-analyst",
+            "failure-analyst"
+          ]
+        }
       },
       "stage.consolidation": {
         "defaultAgent": {
@@ -129,6 +138,7 @@
             "read_bash",
             "view",
             "read_agent",
+            "skill",
             "web_fetch",
             "report_intent",
             "glob",
@@ -199,7 +209,15 @@
             "promptTemplatePath": "prompts/stages/consolidation/agents/reference-validator.md",
             "infer": true
           }
-        ]
+        ],
+        "execution": {
+          "mode": "explicit-sequence",
+          "explicitSequence": [
+            "memory-inventory-reviewer",
+            "contradiction-scope-reviewer",
+            "reference-validator"
+          ]
+        }
       }
     }
   },

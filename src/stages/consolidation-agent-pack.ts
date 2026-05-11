@@ -4,6 +4,7 @@ import type {
 } from "../core/contracts.js";
 import type { RuntimeStageAgentPackConfig } from "../dream/runtime-manifest.js";
 import { loadStageTemplate, renderStageTemplate } from "./stage-agent-templates.js";
+import { runStageAgentPack } from "./stage-agent-pack-execution.js";
 
 const CONSOLIDATION_RETRY =
   "Continue from specialist review. Delegate to specialists if more evidence is needed, then call write_memory/remove_memory for final changes and finalize_consolidation before finishing.";
@@ -42,16 +43,17 @@ export async function runConsolidationAgentPasses(
   customAgents: RunAgentCustomAgentConfig[] | undefined,
   shouldRetry?: () => boolean | Promise<boolean>
 ): Promise<void> {
-  const runOptions = {
+  await runStageAgentPack({
+    provider,
+    prompt,
+    tools,
     streamTag: "consolidation main",
     retries: [CONSOLIDATION_RETRY],
-    shouldRetry: shouldRetry
-      ? async () => await shouldRetry()
-      : undefined,
+    shouldRetry,
     customAgents,
-    defaultAgent: agentPack?.defaultAgent
-  };
-  await provider.runAgent(prompt, tools, runOptions);
+    defaultAgent: agentPack?.defaultAgent,
+    agentPack
+  });
 }
 
 export async function requestConsolidationFinalVerdict(
