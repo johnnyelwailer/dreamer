@@ -26,7 +26,6 @@ import { HonchoMemoryBackend } from "../backends/honcho-memory-backend.js";
 import type { DreamRunState, RunDreamOptions } from "./run-dream-types.js";
 import { createTtyStatus } from "../shared/tty-progress.js";
 import { loadDreamerPlugins } from "./plugin-loader.js";
-import { backupMemoryBeforeRun } from "./memory-backup.js";
 
 export type { RunDreamOptions } from "./run-dream-types.js";
 
@@ -87,13 +86,6 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
   registry.registerStage(new ConsolidationStage(provider, config.stageAgentPacks?.["stage.consolidation"]));
 
   try {
-    const backup = await status.track("backing up memory", backupMemoryBeforeRun(workspaceDir, runId, config));
-    if (backup) {
-      status.update(`memory backup saved ${backup.backupDir}`);
-    } else {
-      status.update("memory backup skipped");
-    }
-
     const context = buildContext(workspaceDir, runId);
     context.diary.push(`config:adapter=${config.adapterId}`);
     context.diary.push(`config:backend=${config.backendId}`);
