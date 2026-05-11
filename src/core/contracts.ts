@@ -75,6 +75,42 @@ export type PipelineStage = {
   run: (context: DreamContext) => Promise<DreamContext>;
 };
 
+export type StageSlotId = string;
+export type StageImplementationId = string;
+
+export type StageDataShape =
+  | "events"
+  | "signals"
+  | "insights"
+  | "memories"
+  | "docs"
+  | "reports";
+
+export type StageSlot = {
+  id: StageSlotId;
+  description?: string;
+  defaultImplementationId: StageImplementationId;
+  inputShape: StageDataShape[];
+  outputShape: StageDataShape[];
+};
+
+export type StageImplementationInput = {
+  slotId: StageSlotId;
+  context: DreamContext;
+  config?: unknown;
+};
+
+export type StageImplementationResult = {
+  context: DreamContext;
+};
+
+export type StageImplementation = {
+  id: StageImplementationId;
+  slots: StageSlotId[];
+  exportsData?: boolean;
+  run: (input: StageImplementationInput) => Promise<StageImplementationResult>;
+};
+
 export type DreamerPluginContext = {
   workspaceDir: string;
   storageDir: string;

@@ -8,27 +8,16 @@ import { discoverClaudeCodeLogPath, discoverCodexTraceLogPath } from "./adapter-
 import { defaultCopilotMemoryTarget } from "./copilot-memory-path.js";
 import { loadWorkspaceDotenv, readList, readPositiveInteger, readPositiveNumber } from "./config-env.js";
 import { workspaceStorageDir } from "./dreamer-home.js";
-
-type HonchoEnvironment = "local" | "production";
-
-function readHonchoEnvironment(value: string | undefined): HonchoEnvironment | undefined {
-  if (value === "local" || value === "production") return value;
-  return undefined;
-}
-
-function readBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined) return fallback;
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") return true;
-  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") return false;
-  return fallback;
-}
+import { readBoolean, readHonchoEnvironment, readSessionScopeMode, type HonchoEnvironment } from "./config-readers.js";
+import { mergeStageImplementationBindings, normalizeStageSlotId, parseStageImplementationBindings } from "./stage-implementation-config.js";
+import type { CopilotSessionScopeMode } from "../adapters/copilot-debug/types.js";
 
 export type DreamConfig = {
   adapterId: string;
   backendId: string;
   providerId: string;
   stageOrder: string[];
+  stageImplementations: Record<string, string>;
   stageAgentPacks?: Record<string, RuntimeStageAgentPackConfig>;
   pluginPaths?: string[];
   minSessions: number;
@@ -37,6 +26,8 @@ export type DreamConfig = {
   copilotDebugSearchPaths: string[];
   copilotDebugLookbackDays?: number;
   copilotDebugMaxSessionsPerRun?: number;
+  copilotDebugBatchSessions: number;
+  copilotDebugSessionScopeMode: CopilotSessionScopeMode;
   jsonlEventsPath: string;
   claudeCodePath: string;
   codexTracePath: string;
@@ -72,6 +63,7 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
   const fixturesDir = join(storageDir, "fixtures");
   const runtime = readRuntimeManifest(workspaceDir);
   const stageOrderOverride = readList(process.env.DREAM_STAGE_ORDER);
+  const stageImplementationOverride = parseStageImplementationBindings(process.env.DREAM_STAGE_IMPLEMENTATIONS);
   const copilotSdkModel = process.env.COPILOT_SDK_MODEL ?? runtime.provider.defaultModel;
   const discoveredCopilotDebugSessionDir = discoverCopilotDebugSessionDir({
     searchPaths: runtime.discovery?.copilotDebug?.searchPaths,
@@ -90,7 +82,9 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
     adapterId: process.env.DREAM_ADAPTER_ID ?? "adapter.copilot.debug",
     backendId: process.env.DREAM_BACKEND_ID ?? "backend.file.memory",
     providerId: process.env.DREAM_PROVIDER_ID ?? runtime.provider.id,
-    stageOrder: stageOrderOverride.length > 0 ? stageOrderOverride : runtime.pipeline.stageOrder,
+    stageOrder: (stageOrderOverride.length > 0 ? stageOrderOverride : runtime.pipeline.stageOrder)
+      .map(normalizeStageSlotId),
+    stageImplementations: mergeStageImplementationBindings(runtime.pipeline.stageImplementations, stageImplementationOverride),
     stageAgentPacks: runtime.pipeline.agentPacks,
     pluginPaths: runtime.plugins?.paths ?? [],
     minSessions: Number(process.env.DREAM_MIN_SESSIONS ?? "1"),
@@ -105,6 +99,9 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
     copilotDebugMaxSessionsPerRun:
       readPositiveInteger(process.env.DREAM_COPILOT_MAX_SESSIONS_PER_RUN) ??
       runtime.discovery?.copilotDebug?.maxSessionsPerRun,
+    copilotDebugBatchSessions: readPositiveInteger(process.env.DREAM_COPILOT_BATCH_SESSIONS) ?? 3,
+    copilotDebugSessionScopeMode:
+      readSessionScopeMode(process.env.DREAM_COPILOT_SESSION_SCOPE_MODE) ?? "newest-first",
     jsonlEventsPath: process.env.DREAM_JSONL_EVENTS_FILE ?? join(fixturesDir, "events.jsonl"),
     claudeCodePath:
       process.env.DREAM_CLAUDE_CODE_FILE ?? discoveredClaudeCodePath ?? join(fixturesDir, "claude-code.jsonl"),

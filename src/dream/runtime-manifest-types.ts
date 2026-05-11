@@ -39,6 +39,7 @@ type RuntimeProviderConfig = {
 
 type RuntimePipelineConfig = {
   stageOrder: string[];
+  stageImplementations?: Record<string, string>;
   agentPacks?: Record<string, RuntimeStageAgentPackConfig>;
 };
 

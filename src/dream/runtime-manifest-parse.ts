@@ -1,6 +1,7 @@
 import type { RuntimeManifest } from "./runtime-manifest-types.js";
 import { parseByokConfig } from "./runtime-manifest-byok-parse.js";
 import { parseAgentPacks } from "./runtime-manifest-agent-packs-parse.js";
+import { parseDiscoverySource } from "./runtime-manifest-discovery-parse.js";
 import { resolveAssetPath } from "./dreamer-home.js";
 function asString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim().length === 0) throw new Error(`Invalid runtime manifest field: ${field}`);
@@ -42,30 +43,14 @@ function asStringArray(value: unknown, field: string): string[] {
   }
   return value;
 }
-
-function parseDiscoverySource(
-  value: unknown,
-  field: string
-): {
-  mode: "append" | "override";
-  searchPaths: string[];
-  lookbackDays?: number;
-  maxSessionsPerRun?: number;
-} | undefined {
+function asStringRecord(value: unknown, field: string): Record<string, string> | undefined {
   if (value === undefined) return undefined;
-  const source = value as Record<string, unknown>;
-  return {
-    mode: source.mode ? asEnum(source.mode, ["append", "override"] as const, `${field}.mode`) : "append",
-    searchPaths: source.searchPaths ? asStringArray(source.searchPaths, `${field}.searchPaths`) : [],
-    lookbackDays:
-      source.lookbackDays === undefined
-        ? undefined
-        : asPositiveNumber(source.lookbackDays, `${field}.lookbackDays`),
-    maxSessionsPerRun:
-      source.maxSessionsPerRun === undefined
-        ? undefined
-        : asPositiveInteger(source.maxSessionsPerRun, `${field}.maxSessionsPerRun`)
-  };
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`Invalid runtime manifest field: ${field}`);
+  const record = value as Record<string, unknown>;
+  for (const [key, item] of Object.entries(record)) {
+    if (!key.trim() || typeof item !== "string" || !item.trim()) throw new Error(`Invalid runtime manifest field: ${field}`);
+  }
+  return record as Record<string, string>;
 }
 
 export function parseRuntimeManifestObject(parsed: unknown): RuntimeManifest {
@@ -109,6 +94,7 @@ export function parseRuntimeManifestObject(parsed: unknown): RuntimeManifest {
     },
     pipeline: {
       stageOrder: asStringArray(pipeline.stageOrder, "pipeline.stageOrder"),
+      stageImplementations: asStringRecord(pipeline.stageImplementations, "pipeline.stageImplementations"),
       agentPacks: parseAgentPacks(pipeline.agentPacks, "pipeline.agentPacks")
     },
     docs: {

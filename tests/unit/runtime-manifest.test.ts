@@ -69,6 +69,9 @@ describe("readRuntimeManifest", () => {
       ...baseRuntime(),
       pipeline: {
         stageOrder: ["stage.signal"],
+        stageImplementations: {
+          "slot.signal": "impl.signal.local-honcho-ingest"
+        },
         agentPacks: {
           "stage.signal": {
             defaultAgent: { excludedTools: ["read_file"] },
@@ -87,6 +90,7 @@ describe("readRuntimeManifest", () => {
     const runtime = readRuntimeManifest(workspaceDir);
 
     expect(runtime.pipeline.stageOrder).toEqual(["stage.signal"]);
+    expect(runtime.pipeline.stageImplementations).toEqual({ "slot.signal": "impl.signal.local-honcho-ingest" });
     expect(runtime.pipeline.agentPacks?.["stage.signal"]?.customAgents.map((agent) => agent.name)).toEqual([
       "workspace-local-reader"
     ]);
