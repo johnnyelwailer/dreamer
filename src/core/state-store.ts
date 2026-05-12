@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { workspaceStorageDir } from "../dream/dreamer-home.js";
 
@@ -19,6 +19,10 @@ export class JsonStateStore {
   async write(data: JsonObject): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
     await writeFile(this.filePath, JSON.stringify(data, null, 2), "utf8");
+  }
+
+  async delete(): Promise<void> {
+    await rm(this.filePath, { force: true });
   }
 
   static runStatePath(workspaceDir: string): string {

@@ -33,6 +33,7 @@ import { readDreamConfig } from "./config.js";
 import { writeProviderDocs } from "./generate-provider-docs.js";
 import { backupMemoryBeforeRun } from "./memory-backup.js";
 import { loadDreamerPlugins } from "./plugin-loader.js";
+import { shouldIgnoreSavedAdapterCheckpoint } from "./run-dream-state.js";
 import type { DreamRunState, RunDreamOptions } from "./run-dream-types.js";
 import type { RuntimeStageAgentPackConfig } from "./runtime-manifest.js";
 
@@ -320,8 +321,22 @@ export async function runDream(
     const loaded = await status.track("loading memory", backend.load());
     context.memories = loaded;
     status.update(`loaded memories=${loaded.length}`);
+    if (options.resetState === true) {
+      await status.track("resetting saved state", state.delete());
+    }
     const previousState = await state.read<DreamRunState>({});
-    const adapterCheckpoint = options.replayFromStart
+    const checkpointPolicy = shouldIgnoreSavedAdapterCheckpoint(
+      previousState,
+      loaded.length,
+      options,
+    );
+    if (checkpointPolicy.reason === "empty-memory-auto-replay") {
+      status.update(
+        "memory store empty; ignoring saved ingest state and replaying from start",
+      );
+      context.diary.push("config:auto_replay_from_start=empty_memory");
+    }
+    const adapterCheckpoint = checkpointPolicy.ignore
       ? undefined
       : (previousState.adapterCheckpoint ?? previousState.cursor);
     const orderedStages = config.stageOrder.map((id) =>
@@ -380,8 +395,11 @@ export async function runDream(
         const reason =
           "events_ingested_without_session_start (likely incremental cursor filtering on session_start)";
         context.diary.push(`ingest:no_session_starts reason=${reason}`);
+        context.diary.push(
+          "ingest:hint=run with --replay-from-start or --reset-state to rebuild from historical sessions",
+        );
         status.update(
-          `ingest cycle=${cycle} has events (${ingest.events.length}) but 0 new session_start; ${reason}`,
+          `ingest cycle=${cycle} has events (${ingest.events.length}) but 0 new session_start; ${reason}; hint=--reset-state or --replay-from-start`,
         );
       }
       if (ingest.progress) {
