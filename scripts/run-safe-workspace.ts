@@ -4,6 +4,11 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { ttyWriteLine, ttyWriteTagged } from "../src/shared/tty-log-format.js";
 
+type ShellCommand = {
+  command: string;
+  args: string[];
+};
+
 type SafeRunOptions = {
   command: string;
   branchPrefix: string;
@@ -103,12 +108,27 @@ function createBranchName(prefix: string): string {
   return `${prefix}-${stamp}`;
 }
 
+function getCommandShell(command: string): ShellCommand {
+  if (process.platform === "win32") {
+    return {
+      command: "pwsh",
+      args: ["-NoLogo", "-NoProfile", "-Command", command]
+    };
+  }
+
+  return {
+    command: process.env.SHELL || "sh",
+    args: ["-lc", command]
+  };
+}
+
 function main(): void {
   const workspaceDir = process.cwd();
   const options = parseArgs(process.argv.slice(2));
+  const commandShell = getCommandShell(options.command);
 
   if (options.isolationMode === "none") {
-    const directResult = spawnSync("zsh", ["-lc", options.command], {
+    const directResult = spawnSync(commandShell.command, commandShell.args, {
       cwd: workspaceDir,
       stdio: "inherit",
       env: {
@@ -138,7 +158,7 @@ function main(): void {
 
   // The dreamer runs from its own source dir (node_modules here). The worktree
   // is just an isolated copy of the workspace files — passed via env var.
-  const commandResult = spawnSync("zsh", ["-lc", options.command], {
+  const commandResult = spawnSync(commandShell.command, commandShell.args, {
     cwd: workspaceDir,
     stdio: "inherit",
     env: {
