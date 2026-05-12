@@ -14,7 +14,6 @@ type SafeRunOptions = {
   branchPrefix: string;
   keepWorktree: boolean;
   allowDirtyWorkspace: boolean;
-  isolationMode: "repo-worktree" | "none";
 };
 
 function parseArgs(argv: string[]): SafeRunOptions {
@@ -23,10 +22,6 @@ function parseArgs(argv: string[]): SafeRunOptions {
     branchPrefix: "dreamer/agent",
     keepWorktree: true,
     allowDirtyWorkspace: true,
-    isolationMode:
-      process.env.DREAM_WORKSPACE_ISOLATION_MODE === "none"
-        ? "none"
-        : "repo-worktree",
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -47,18 +42,6 @@ function parseArgs(argv: string[]): SafeRunOptions {
     }
     if (arg === "--allow-dirty") {
       options.allowDirtyWorkspace = true;
-      continue;
-    }
-    if (arg === "--isolation") {
-      const value = argv[i + 1];
-      if (value === "none" || value === "repo-worktree") {
-        options.isolationMode = value;
-        i += 1;
-      }
-      continue;
-    }
-    if (arg === "--no-isolation") {
-      options.isolationMode = "none";
       continue;
     }
   }
@@ -138,26 +121,6 @@ function main(): void {
   const workspaceDir = process.cwd();
   const options = parseArgs(process.argv.slice(2));
   const commandShell = getCommandShell(options.command);
-
-  if (options.isolationMode === "none") {
-    const directResult = spawnSync(commandShell.command, commandShell.args, {
-      cwd: workspaceDir,
-      stdio: "inherit",
-      env: {
-        ...process.env,
-        DREAMER_ENV_SOURCE_DIR: process.env.DREAMER_ENV_SOURCE_DIR ?? workspaceDir,
-        DREAMER_WORKSPACE_DIR:
-          process.env.DREAMER_WORKSPACE_DIR ?? workspaceDir,
-      },
-    });
-    ttyWriteLine();
-    ttyWriteTagged("safe workspace", "run complete (isolation=none)");
-    ttyWriteLine(`Command: ${options.command}`);
-    if (directResult.status !== 0) {
-      process.exitCode = directResult.status ?? 1;
-    }
-    return;
-  }
 
   assertGitRepo(workspaceDir);
   if (!options.allowDirtyWorkspace) assertCleanWorkspace(workspaceDir);

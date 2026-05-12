@@ -8,7 +8,7 @@ import { createSignalTools } from "./signal-stage-tools.js";
 import { runStageAgentPack } from "./stage-agent-pack-execution.js"
 import type { WrittenSession } from "./signal-stage-file-writer.js";
 import { buildSignalCustomAgents } from "./signal-stage-agents.js";
-import { resolveSessionWorkingDirectory, type SessionWorkspaceMode } from "./session-workspace-strategy.js";
+import { resolveSessionWorkspaceDecision, type SessionWorkspaceMode } from "./session-workspace-strategy.js";
 
 type SessionRunArgs = {
   provider: IntelligenceProvider;
@@ -90,15 +90,18 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
   );
   const currentOrdinal = runOrdinal();
   const streamTag = `signal:${sessionFile}`;
-  const workingDirectory = resolveSessionWorkingDirectory(
+  const workspaceDecision = resolveSessionWorkspaceDecision(
     sessionWorkspaceMode,
     context.workspaceDir,
     sessionStart?.metadata.workspaceDir
   );
-  context.diary.push(`signals:session_workspace:${sessionFile}=${workingDirectory ?? "none"}`);
+  const workingDirectory = workspaceDecision.workingDirectory;
+  context.diary.push(
+    `signals:session_workspace:${sessionFile}=source:${workspaceDecision.source}:path:${workingDirectory ?? "none"}`
+  );
   ttyWriteTagged(
     "dream",
-    `signal invoking ${sessionFile} run=${currentOrdinal}/${totalRunnableSessions} user_turns=${userTurns} messages=${messageCount} tools=${toolCount} workspace=${workingDirectory ?? "none"}`
+    `signal invoking ${sessionFile} run=${currentOrdinal}/${totalRunnableSessions} user_turns=${userTurns} messages=${messageCount} tools=${toolCount} workspace_source=${workspaceDecision.source} workspace=${workingDirectory ?? "none"}`
   );
   const scopedPrompt = `${basePrompt}\n\nFocus ONLY on ${sessionFile}. Do not summarize other sessions. Extract durable insights for this session, call record_insight for each one, and call finalize_signal_extraction before finishing.`;
   const prompt = scopedPrompt
