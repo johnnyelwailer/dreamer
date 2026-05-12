@@ -1,4 +1,6 @@
 import { JsonlEventAdapter } from "../adapters/jsonl-event-adapter.js";
+import { execFileSync } from "node:child_process";
+import { basename } from "node:path";
 import { InMemoryBackend } from "../backends/in-memory-backend.js";
 import { FileMemoryBackend } from "../backends/file-memory-backend.js";
 import { runPipeline } from "../core/pipeline.js";
@@ -20,13 +22,14 @@ import { GovernanceStage } from "../stages/governance-stage.js";
 import { ObservabilityStage } from "../stages/observability-stage.js";
 import { OrientationStage } from "../stages/orientation-stage.js";
 import { SignalStage } from "../stages/signal-stage.js";
-import { HonchoSignalIngestionImplementation } from "../stages/honcho-signal-ingestion-stage.js";
+import { HonchoRawSignalIngestionImplementation, HonchoSignalIngestionImplementation } from "../stages/honcho-signal-ingestion-stage.js";
 import { SkillsStage } from "../stages/skills-stage.js";
 import { CopilotMemoryBackend } from "../backends/copilot-memory-backend.js";
 import { HonchoMemoryBackend } from "../backends/honcho-memory-backend.js";
 import type { DreamRunState, RunDreamOptions } from "./run-dream-types.js";
 import { createTtyStatus } from "../shared/tty-progress.js";
 import { loadDreamerPlugins } from "./plugin-loader.js";
+import { ProviderSessionNamer } from "../core/session-naming.js";
 
 export type { RunDreamOptions } from "./run-dream-types.js";
 
@@ -34,9 +37,55 @@ function formatLimit(value: number | undefined): string {
   return value === undefined ? "all" : String(value);
 }
 
+function slug(value: string | undefined, fallback: string, maxLength = 24): string {
+  const normalized = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!normalized) return fallback;
+  return normalized.slice(0, maxLength);
+}
+
+function gitRead(workspaceDir: string, args: string[]): string | undefined {
+  try {
+    const value = execFileSync("git", ["-C", workspaceDir, ...args], {
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8"
+    }).trim();
+    return value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readRepoName(remoteUrl: string | undefined): string | undefined {
+  if (!remoteUrl) return undefined;
+  const trimmed = remoteUrl.trim().replace(/\.git$/i, "");
+  const slashIndex = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf(":"));
+  if (slashIndex < 0 || slashIndex >= trimmed.length - 1) return undefined;
+  return trimmed.slice(slashIndex + 1);
+}
+
+function compactId(value: string, prefix: string): string {
+  return value.startsWith(prefix) ? value.slice(prefix.length) : value;
+}
+
+function createRunId(workspaceDir: string, config: ReturnType<typeof readDreamConfig>): string {
+  const workspace = slug(basename(workspaceDir), "workspace", 20);
+  const remoteUrl = gitRead(workspaceDir, ["config", "--get", "remote.origin.url"]);
+  const repo = slug(readRepoName(remoteUrl), workspace, 20);
+  const branch = slug(gitRead(workspaceDir, ["rev-parse", "--abbrev-ref", "HEAD"]), "detached", 20);
+  const adapter = slug(compactId(config.adapterId, "adapter."), "adapter", 20);
+  const backend = slug(compactId(config.backendId, "backend."), "backend", 20);
+  const context = `${adapter}-${backend}`.slice(0, 36);
+  return `run-${workspace}-${repo}-${branch}-${context}-${Date.now()}`;
+}
+
 export async function runDream(workspaceDir: string, options: RunDreamOptions = {}): Promise<void> {
-  const runId = `run-${Date.now()}`;
   const config = readDreamConfig(workspaceDir);
+  const runId = createRunId(workspaceDir, config);
   const configuredMaxSessions =
     options.maxSessions === "all"
       ? undefined
@@ -94,13 +143,29 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
   const state = new JsonStateStore(JsonStateStore.runStatePath(workspaceDir));
   const signalStage = new SignalStage(provider, config.stageAgentPacks?.["stage.signal"]);
   registry.registerStage(signalStage);
+  let honchoSignalImplementation: HonchoSignalIngestionImplementation | undefined;
+  const honchoSignalStage = new SignalStage(provider, config.stageAgentPacks?.["stage.signal"], {
+    onInsight: (context, insight) => honchoSignalImplementation?.recordInsight(context, insight),
+    onSessionComplete: (context) => honchoSignalImplementation?.flushPending(context, "session"),
+    onComplete: (context) => honchoSignalImplementation?.complete(context)
+  });
+  honchoSignalImplementation = new HonchoSignalIngestionImplementation(honchoSignalStage, workspaceDir, {
+    workspaceId: config.honchoWorkspaceId,
+    apiKey: config.honchoApiKey,
+    baseURL: config.honchoBaseUrl,
+    environment: config.honchoEnvironment,
+    sessionNamer: new ProviderSessionNamer(provider)
+  });
   registry.registerStageImplementation(
-    new HonchoSignalIngestionImplementation(signalStage, workspaceDir, {
+    new HonchoRawSignalIngestionImplementation(workspaceDir, {
       workspaceId: config.honchoWorkspaceId,
       apiKey: config.honchoApiKey,
       baseURL: config.honchoBaseUrl,
       environment: config.honchoEnvironment
     })
+  );
+  registry.registerStageImplementation(
+    honchoSignalImplementation
   );
   registry.registerStage(new ConsolidationStage(provider, config.stageAgentPacks?.["stage.consolidation"]));
 
@@ -165,6 +230,10 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
       const backlog = ingest.progress
         ? `${ingest.progress.completedUnits}/${ingest.progress.totalUnits} (${ingest.progress.completionPercent}%)`
         : "unknown";
+      const ingestComplete = Boolean(
+        ingest.progress &&
+        (ingest.progress.remainingUnits === 0 || ingest.progress.completionPercent >= 100)
+      );
       status.update(
         `ingest cycle=${cycle} events=${ingest.events.length} sessions this cycle=${sessions} ` +
           `sessions overall=${totalSessionsProcessed} backlog=${backlog}`
@@ -207,6 +276,7 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
 
       if (sessions < config.minSessions) {
         status.update(`skipping pipeline cycle=${cycle} sessions=${sessions} minSessions=${config.minSessions}`);
+        if (ingestComplete) break;
         continue;
       }
 
@@ -218,6 +288,7 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
 
       await runPipeline(context, orderedStages, status);
       await status.track(`saving memories cycle=${cycle}`, backend.save(context.memories));
+      if (ingestComplete) break;
     }
 
     await status.track("writing provider docs artifacts (workspace storage)", writeProviderDocs(context, provider, config));

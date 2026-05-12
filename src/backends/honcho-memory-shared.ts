@@ -79,9 +79,24 @@ export const SCOPE_PEERS: Record<MemoryScope, string> = {
   workspace: "dreamer-workspace",
   session: "dreamer-session"
 };
-export function defaultWorkspaceId(workspaceDir: string): string {
-  const candidate = basename(workspaceDir).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
-  return candidate.length > 0 ? candidate : "dreamer";
+
+const MAX_HONCHO_SESSION_ID_CHARS = 120;
+
+export function defaultWorkspaceId(_workspaceDir: string): string {
+  return "dreamer";
+}
+
+export function honchoSafeId(value: string): string {
+  const safe = value.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return safe.length > 0 ? safe : "dreamer";
+}
+
+export function honchoSafeSessionId(value: string): string {
+  return honchoSafeId(value.toLowerCase()).replace(/-+/g, "-").slice(0, MAX_HONCHO_SESSION_ID_CHARS).replace(/-+$/g, "");
+}
+
+export function repoScopedSessionId(prefix: string, workspaceDir: string): string {
+  return honchoSafeSessionId(`${prefix}-${basename(workspaceDir)}`);
 }
 
 export function isMemoryScope(value: unknown): value is MemoryScope {
@@ -122,18 +137,4 @@ export function parseLegacyExport(value: unknown): MemoryRecord[] | null {
   if (Array.isArray(record.records)) return record.records as MemoryRecord[];
   if (Array.isArray(record.memory)) return record.memory as MemoryRecord[];
   return null;
-}
-
-export function toConclusionContent(record: MemoryRecord): string {
-  return JSON.stringify({
-    id: record.id,
-    scope: record.scope,
-    statement: record.statement,
-    confidence: record.confidence,
-    contradictoryTo: record.contradictoryTo,
-    provenance: record.provenance,
-    context: record.context,
-    evidence: record.evidence,
-    capture: record.capture
-  });
 }

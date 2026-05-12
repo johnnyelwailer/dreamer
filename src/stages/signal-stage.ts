@@ -7,12 +7,19 @@ import type { RuntimeStageAgentPackConfig } from "../dream/runtime-manifest.js";
 import { writeSessionFiles } from "./signal-stage-file-writer.js";
 import { isEnabled, loadPrompt, runSignalSession } from "./signal-stage-runner.js";
 
+export type SignalStageHooks = {
+  onInsight?: (context: DreamContext, insight: InsightRecord) => void;
+  onSessionComplete?: (context: DreamContext) => Promise<void> | void;
+  onComplete?: (context: DreamContext) => Promise<void> | void;
+};
+
 export class SignalStage implements PipelineStage {
   readonly id = "stage.signal";
 
   constructor(
     private readonly provider: IntelligenceProvider,
-    private readonly agentPack?: RuntimeStageAgentPackConfig
+    private readonly agentPack?: RuntimeStageAgentPackConfig,
+    private readonly hooks: SignalStageHooks = {}
   ) {}
 
   async run(context: DreamContext): Promise<DreamContext> {
@@ -80,14 +87,17 @@ export class SignalStage implements PipelineStage {
         orientationPath,
         liveStreamEnabled,
         captured,
+        onInsight: (insight) => this.hooks.onInsight?.(context, insight),
         customAgents
       });
+      await this.hooks.onSessionComplete?.(context);
     }
 
     for (const insight of captured) {
       context.insights.push(insight);
     }
     context.diary.push(`signals:insights_extracted=${captured.length}`);
+    await this.hooks.onComplete?.(context);
     return context;
   }
 }

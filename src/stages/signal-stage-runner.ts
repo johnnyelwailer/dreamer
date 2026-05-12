@@ -22,6 +22,7 @@ type SessionRunArgs = {
   orientationPath: string;
   liveStreamEnabled: boolean;
   captured: InsightRecord[];
+  onInsight?: (insight: InsightRecord) => void;
   customAgents?: NonNullable<RuntimeStageAgentPackConfig["customAgents"]>;
 };
 
@@ -59,7 +60,10 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
   const tools = createSignalTools(
     runDir,
     writtenSessions,
-    (insight) => sessionCaptured.push(insight),
+    (insight) => {
+      sessionCaptured.push(insight);
+      args.onInsight?.(insight);
+    },
     {
       sessionId: String(sessionStart?.metadata.sessionId ?? "").slice(0, 64) || undefined,
       sessionReference: sessionFile.replace(/\.md$/, "")

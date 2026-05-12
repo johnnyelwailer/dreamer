@@ -17,6 +17,8 @@
     "dream:honcho:unsafe": "DREAM_BACKEND_ID=backend.honcho.memory node --import tsx src/cli.ts run",
     "dream:honcho-ingest-signal": "node --import tsx scripts/run-safe-workspace.ts --isolation none --command \"pnpm dream:honcho-ingest-signal:unsafe\"",
     "dream:honcho-ingest-signal:unsafe": "DREAM_STAGE_ORDER=slot.orientation,slot.signal,slot.documentation,slot.skills,slot.governance,slot.observability DREAM_STAGE_IMPLEMENTATIONS=slot.signal=impl.signal.local-honcho-ingest node --import tsx src/cli.ts run",
+    "dream:honcho-ingest-raw": "node --import tsx scripts/run-safe-workspace.ts --isolation none --command \"pnpm dream:honcho-ingest-raw:unsafe\"",
+    "dream:honcho-ingest-raw:unsafe": "DREAM_STAGE_ORDER=slot.orientation,slot.signal,slot.documentation,slot.skills,slot.governance,slot.observability DREAM_STAGE_IMPLEMENTATIONS=slot.signal=impl.signal.honcho-raw node --import tsx src/cli.ts run",
     "dream:schedule": "tsx src/cli.ts schedule --once",
     "eval:copilot-sdk": "tsx scripts/run-copilot-sdk-eval.ts",
     "eval:dream-quality": "node --import tsx scripts/run-dream-quality-eval.ts",

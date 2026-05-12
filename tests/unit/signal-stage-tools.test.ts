@@ -141,4 +141,35 @@ describe("createSignalTools", () => {
       summary: "Reviewed the session and found no durable preferences or workspace rules."
     });
   });
+
+  it("keeps long insight statements beyond 200 chars without mid-token clipping", async () => {
+    const captured: InsightRecord[] = [];
+    const session: WrittenSession = {
+      sessionIndex: 1,
+      events: [event({ id: "s1", kind: "session_start", metadata: { sessionId: "session-long" } })],
+      messageCount: 0
+    };
+    const tools = createSignalTools("/tmp/dreamer-run", [session], (insight) => captured.push(insight), {
+      sessionId: "session-long"
+    });
+    const recordInsight = tools.find((tool) => tool.name === "record_insight") as
+      | { handler: (args: Record<string, unknown>) => unknown | Promise<unknown> }
+      | undefined;
+
+    const longStatement =
+      "Signal-stage required-tool failures such as missing finalize_signal_extraction should be treated as per-session non-fatal skips with explicit diary markers and visibility in reports. " +
+      "When users paste wtf-prefixed terminal diagnostics, proceed straight to code-level investigation and fix without clarifying loops. " +
+      "Use pnpm dream:honcho for end-to-end validation after signal-stage patches so multi-session runs are verified.";
+
+    await recordInsight?.handler({
+      statement: longStatement,
+      scope: "workspace",
+      references: [{ kind: "session", value: "session-1" }]
+    });
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.statement.length).toBeGreaterThan(200);
+    expect(captured[0]?.statement).toContain("missing finalize_signal_extraction");
+    expect(captured[0]?.statement).toContain("wtf-prefixed terminal diagnostics");
+  });
 });

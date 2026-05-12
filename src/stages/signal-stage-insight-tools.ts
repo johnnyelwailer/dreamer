@@ -2,6 +2,17 @@ import { defineTool } from "@github/copilot-sdk";
 import { MEMORY_CATEGORIES, type InsightRecord } from "../core/types.js";
 import { EVIDENCE_ITEM_SCHEMA, REFERENCE_ITEM_SCHEMA, normalizeEvidence, normalizeReferences, normalizeTags, parseCategory, parseHorizon } from "./memory-tool-shared.js";
 
+const MAX_INSIGHT_STATEMENT_CHARS = 800;
+
+function normalizeStatement(value: unknown): string {
+  const raw = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (raw.length <= MAX_INSIGHT_STATEMENT_CHARS) return raw;
+  const clipped = raw.slice(0, MAX_INSIGHT_STATEMENT_CHARS);
+  const boundary = clipped.lastIndexOf(" ");
+  if (boundary >= 40) return clipped.slice(0, boundary).trim();
+  return clipped.trim();
+}
+
 export function createRecordInsightTool(
   onInsight: (insight: InsightRecord) => void,
   sessionHint?: { sessionId?: string; sessionReference?: string }
@@ -27,7 +38,7 @@ export function createRecordInsightTool(
     },
     skipPermission: true,
     handler: (args: Record<string, unknown>) => {
-      const statement = String(args.statement ?? "").trim().slice(0, 200);
+      const statement = normalizeStatement(args.statement);
       if (statement.length < 10) return { textResultForLlm: "Too short.", resultType: "error" as const };
       const references = normalizeReferences(args.references) ?? [];
       const autoSessionReference = sessionHint?.sessionReference ?? sessionHint?.sessionId;

@@ -145,18 +145,31 @@ If no implementation is configured for a slot, Dreamer uses the slot's `defaultI
 
 Honcho should be modeled as normal implementations plus the existing backend:
 
+Honcho workspace mapping:
+
+- A Honcho workspace maps to the Dreamer application/tool namespace, not to a git repo, local directory, local machine, or global user profile.
+- Users and agents are Honcho peers.
+- Git repos, local workspace directories, branches, runs, and imported transcript batches are Honcho sessions or session/message metadata.
+- Dreamer should default to a stable workspace such as `dreamer` and use repo-scoped sessions such as `dreamer-memory-<repo>` and `raw-<repo>` to avoid creating a new Honcho session for every run.
+- Use separate Honcho workspaces only for hard isolation boundaries such as environment, tenant, team, or explicitly configured cross-tool sharing.
+
 - `impl.signal.honcho-raw`
   - slot: `slot.signal`
-  - sends sanitized raw transcript events to Honcho
+  - sends sanitized raw transcript events to a repo-scoped Honcho session
   - can either return no local insights or return Honcho-derived insights
 
 - `impl.signal.local-llm`
   - slot: `slot.signal`
   - current local signal extraction behavior
 
+- `impl.signal.local-honcho-ingest`
+  - slot: `slot.signal`
+  - runs local signal extraction and writes resulting conclusions to a repo-scoped Honcho session
+
 - `impl.consolidation.honcho`
   - slot: `slot.consolidation`
-  - asks Honcho for context or conclusions and converts them into `MemoryRecord`s
+  - asks Honcho for peer/repo context or conclusions and converts them into `MemoryRecord`s
+  - should query within the Dreamer/tool workspace and prefer repo-scoped session metadata when repo-local memory is needed
 
 - `impl.consolidation.local-llm`
   - slot: `slot.consolidation`
@@ -164,11 +177,11 @@ Honcho should be modeled as normal implementations plus the existing backend:
 
 - `impl.consolidation.hybrid-local-honcho`
   - slot: `slot.consolidation`
-  - uses local insights plus Honcho context, then applies normal memory mutation rules
+  - uses local insights plus Honcho peer/repo context, then applies normal memory mutation rules
 
 - `backend.honcho.memory`
   - remains a `MemoryBackend`
-  - stores final memory snapshots
+  - stores final memory snapshots in repo-scoped conclusions and session metadata
 
 Users can choose raw Honcho signal extraction, Honcho consolidation, Honcho as final backend, or all three without core knowing anything special about Honcho.
 

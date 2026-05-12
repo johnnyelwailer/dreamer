@@ -123,6 +123,11 @@ To use Honcho backend, set one of:
 - `HONCHO_API_KEY`, `HONCHO_WORKSPACE_ID`
 - or `DREAM_HONCHO_*` overrides
 
+Honcho scoping follows Honcho's application/peer/session model:
+- `HONCHO_WORKSPACE_ID` is the Dreamer/tool namespace, defaulting to `dreamer`.
+- Dreamer reuses repo-scoped Honcho sessions such as `dreamer-memory-<repo>` and `raw-<repo>`.
+- The user, Dreamer, and memory scopes are represented as peers; source transcript session ids, run ids, repo URL, branch, and commit are stored as metadata.
+
 Custom backends/adapters/agent-runtime providers/stages can be added through plugins. See `docs/plugins.md`.
 
 ## What To Expect

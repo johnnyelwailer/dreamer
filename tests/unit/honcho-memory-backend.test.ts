@@ -26,13 +26,13 @@ class FakeConclusionScope {
     return new FakePage([...this.store]);
   }
 
-  async create(input: { content: string; sessionId?: string } | Array<{ content: string; sessionId?: string }>): Promise<void> {
+  async create(input: { content: string; sessionId?: unknown } | Array<{ content: string; sessionId?: unknown }>): Promise<void> {
     const conclusions = Array.isArray(input) ? input : [input];
     for (const conclusion of conclusions) {
       this.store.push({
         id: `c-${this.store.length + 1}`,
         content: conclusion.content,
-        sessionId: conclusion.sessionId ?? null,
+        sessionId: typeof conclusion.sessionId === "string" ? conclusion.sessionId : null,
         createdAt: new Date().toISOString()
       });
     }
@@ -65,7 +65,7 @@ class FakePeer {
     return this.selfConclusions;
   }
 
-  conclusionsOf(target: string | FakePeer): FakeConclusionScope {
+  conclusionsOf(target: string | { id: string }): FakeConclusionScope {
     const targetId = typeof target === "string" ? target : target.id;
     const existing = this.scopes.get(targetId);
     if (existing) return existing;
@@ -81,8 +81,9 @@ class FakeSession {
 
   constructor(readonly id: string) {}
 
-  async addPeers(peers: Array<FakePeer | string>): Promise<void> {
-    this.peersAdded.push(...peers.map((peer) => (typeof peer === "string" ? peer : peer.id)));
+  async addPeers(peers: unknown): Promise<void> {
+    const list = Array.isArray(peers) ? peers : [peers];
+    this.peersAdded.push(...list.map((peer) => (typeof peer === "string" ? peer : String((peer as { id?: unknown }).id))));
   }
 
   async setMetadata(metadata: Record<string, unknown>): Promise<void> {
@@ -186,12 +187,40 @@ describe("HonchoMemoryBackend", () => {
 
     const workspaceConclusions = planner?.conclusionsOf("dreamer-workspace");
     const userConclusions = planner?.conclusionsOf("dreamer-user");
-    expect((await workspaceConclusions?.list())?.items).toHaveLength(1);
-    expect((await userConclusions?.list())?.items).toHaveLength(1);
+    const workspaceItems = (await workspaceConclusions?.list())?.items ?? [];
+    const userItems = (await userConclusions?.list())?.items ?? [];
+    expect(workspaceItems).toHaveLength(1);
+    expect(userItems).toHaveLength(1);
+    expect(workspaceItems[0]?.content).toContain("[dreamer] Use unit tests before refactors");
+    expect(workspaceItems[0]?.content).toContain("Scope: workspace");
+    expect(workspaceItems[0]?.content).toContain("Repo: dreamer");
+    expect(workspaceItems[0]?.content).toContain("Source: test");
+    expect(workspaceItems[0]?.content).toContain("Memory ID: m-1");
+    expect(() => JSON.parse(workspaceItems[0]?.content ?? "")).toThrow();
+    expect(userItems[0]?.content).toContain("Prefers small reversible edits");
+    expect(userItems[0]?.content).toContain("Contradicts: m-9");
 
     const session = [...client.sessions.values()][0];
+    expect(session.id).toBe("dreamer-memory-dreamer");
     expect(session.peersAdded.sort()).toEqual(["dreamer", "dreamer-session", "dreamer-user", "dreamer-workspace"].sort());
     expect((session.metadata.snapshot as Record<string, unknown>).records).toEqual(memory);
+  });
+
+  it("reuses one repo-scoped Honcho session across repeated memory syncs", async () => {
+    const client = new FakeHonchoClient({ workspaceId: "dreamer-test" });
+    const backend = new HonchoMemoryBackend(process.cwd(), {
+      workspaceId: "dreamer-test",
+      exportPath: ".dreamer/test/honcho-sdk-export.json",
+      createClient: () => client
+    });
+
+    await backend.save(memory.slice(0, 1));
+    await backend.save(memory);
+
+    expect([...client.sessions.keys()]).toEqual(["dreamer-memory-dreamer"]);
+    const snapshot = client.metadata.dreamer as Record<string, unknown>;
+    expect(snapshot.sessionId).toBe("dreamer-memory-dreamer");
+    expect(snapshot.records).toEqual(memory);
   });
 
   it("falls back to the local export when Honcho metadata is empty", async () => {

@@ -4,7 +4,8 @@ import { Honcho, type HonchoConfig } from "@honcho-ai/sdk";
 import { workspaceStorageDir } from "../dream/dreamer-home.js";
 import type { MemoryBackend } from "../core/contracts.js";
 import type { MemoryRecord } from "../core/types.js";
-import { buildSnapshot, defaultWorkspaceId, DREAMER_METADATA_KEY, DREAMER_PEER_ID, type HonchoClientLike, type HonchoConclusionScopeLike, type HonchoExport, type HonchoMemoryBackendOptions, type HonchoPeerLike, type HonchoSnapshot, type MemoryScope, isMemoryScope, parseLegacyExport, parseSnapshot, SCOPE_PEERS, toConclusionContent } from "./honcho-memory-shared.js";
+import { buildMemoryAttribution, toReadableConclusionContent } from "./honcho-memory-conclusion-format.js";
+import { buildSnapshot, defaultWorkspaceId, DREAMER_METADATA_KEY, DREAMER_PEER_ID, type HonchoClientLike, type HonchoConclusionScopeLike, type HonchoExport, type HonchoMemoryBackendOptions, type HonchoPeerLike, type HonchoSnapshot, type MemoryScope, isMemoryScope, parseLegacyExport, parseSnapshot, repoScopedSessionId, SCOPE_PEERS } from "./honcho-memory-shared.js";
 
 async function listAllConclusions(scope: HonchoConclusionScopeLike) {
   const collected = [];
@@ -60,8 +61,9 @@ export class HonchoMemoryBackend implements MemoryBackend {
       return [scope as MemoryScope, peer] as const;
     }));
 
-    const sessionId = `dreamer-sync-${Date.now()}`;
+    const sessionId = repoScopedSessionId("dreamer-memory", this.workspaceDir);
     const snapshot = buildSnapshot(this.workspaceDir, client.workspaceId, sessionId, records);
+    const attribution = buildMemoryAttribution(this.workspaceDir, client.workspaceId);
     const session = await client.session(sessionId, {
       metadata: {
         kind: "dreamer-memory-sync",
@@ -99,7 +101,7 @@ export class HonchoMemoryBackend implements MemoryBackend {
       const recordsForScope = scopedRecords.get(scope as MemoryScope) ?? [];
       if (!recordsForScope.length) continue;
       await planner.conclusionsOf(peer).create(
-        recordsForScope.map((record) => ({ content: toConclusionContent(record), sessionId }))
+        recordsForScope.map((record) => ({ content: toReadableConclusionContent(record, attribution), sessionId }))
       );
     }
     const currentMetadata = await client.getMetadata();
