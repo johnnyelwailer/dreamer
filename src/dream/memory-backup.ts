@@ -1,6 +1,7 @@
 import { cp, mkdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import type { DreamConfig } from "./config.js";
+import { discoverCopilotGlobalMemoryRoot, discoverCopilotWorkspaceMemoryRoot } from "./copilot-memory-path.js";
 import { workspaceStorageDir } from "./dreamer-home.js";
 
 export type MemoryBackupConfig = Pick<
@@ -48,7 +49,13 @@ async function classifyPath(path: string): Promise<BackupItemKind | undefined> {
 
 function candidatePaths(workspaceDir: string, config: MemoryBackupConfig): string[] {
   const storageDir = workspaceStorageDir(workspaceDir);
-  if (config.backendId === "backend.copilot.memory") return [config.copilotMemoryPath];
+  if (config.backendId === "backend.copilot.memory") {
+    return [
+      config.copilotMemoryPath,
+      discoverCopilotWorkspaceMemoryRoot(workspaceDir, false),
+      discoverCopilotGlobalMemoryRoot(false)
+    ].filter((path): path is string => Boolean(path));
+  }
   if (config.backendId === "backend.honcho.memory") return [config.honchoExportPath];
   if (config.backendId === "backend.file.memory") return [join(storageDir, "memory.json")];
   return [];

@@ -1,6 +1,10 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { defaultCopilotMemoryTarget } from "../dream/copilot-memory-path.js";
+import {
+  defaultCopilotMemoryTarget,
+  discoverCopilotGlobalMemoryRoot,
+  discoverCopilotWorkspaceMemoryRoot
+} from "../dream/copilot-memory-path.js";
 import type { MemoryBackend } from "../core/contracts.js";
 import type { MemoryRecord } from "../core/types.js";
 
@@ -13,7 +17,7 @@ type CopilotMemoryDoc = {
 type CopilotTarget =
   | { kind: "legacy-json-file"; path: string }
   | { kind: "markdown-file"; path: string }
-  | { kind: "memory-root"; path: string };
+  | { kind: "memory-root"; path: string; userPath: string; workspacePath: string };
 
 const MACHINE_BLOCK_START = "<!-- dreamer:records:start -->";
 const MACHINE_BLOCK_END = "<!-- dreamer:records:end -->";
@@ -113,7 +117,20 @@ export class CopilotMemoryBackend implements MemoryBackend {
       this.target = { kind: "markdown-file", path: resolvedPath };
       return;
     }
-    this.target = { kind: "memory-root", path: resolvedPath };
+
+    if (targetPath) {
+      this.target = {
+        kind: "memory-root",
+        path: resolvedPath,
+        userPath: resolvedPath,
+        workspacePath: resolvedPath
+      };
+      return;
+    }
+
+    const workspacePath = discoverCopilotWorkspaceMemoryRoot(workspaceDir, false) ?? resolvedPath;
+    const userPath = discoverCopilotGlobalMemoryRoot(false) ?? workspacePath;
+    this.target = { kind: "memory-root", path: resolvedPath, userPath, workspacePath };
   }
 
   async load(): Promise<MemoryRecord[]> {
@@ -149,9 +166,9 @@ export class CopilotMemoryBackend implements MemoryBackend {
     }
 
     const files: Array<{ path: string; scope: MemoryRecord["scope"] }> = [
-      { path: join(this.target.path, USER_MEMORY_FILE), scope: "user" },
-      { path: join(this.target.path, "repo", REPO_MEMORY_FILE), scope: "workspace" },
-      { path: join(this.target.path, "session", SESSION_MEMORY_FILE), scope: "session" }
+      { path: join(this.target.userPath, USER_MEMORY_FILE), scope: "user" },
+      { path: join(this.target.workspacePath, "repo", REPO_MEMORY_FILE), scope: "workspace" },
+      { path: join(this.target.workspacePath, "session", SESSION_MEMORY_FILE), scope: "session" }
     ];
 
     const loaded: MemoryRecord[] = [];
@@ -171,8 +188,17 @@ export class CopilotMemoryBackend implements MemoryBackend {
     if (loaded.length > 0) return loaded;
 
     // Fall back to common memory scope folders without recursive tree walking.
-    const fallbackDirs = [this.target.path, join(this.target.path, "repo"), join(this.target.path, "session")];
-    for (const folder of fallbackDirs) {
+    const fallbackDirs = [
+      this.target.path,
+      this.target.userPath,
+      this.target.workspacePath,
+      join(this.target.workspacePath, "repo"),
+      join(this.target.workspacePath, "session"),
+      join(this.target.path, "repo"),
+      join(this.target.path, "session")
+    ];
+    const uniqueFallbackDirs = [...new Set(fallbackDirs)];
+    for (const folder of uniqueFallbackDirs) {
       const entries = await readdir(folder, { withFileTypes: true }).catch(() => []);
       for (const entry of entries) {
         if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
@@ -219,15 +245,15 @@ export class CopilotMemoryBackend implements MemoryBackend {
     const scopedFiles = [
       {
         scope: "user" as const,
-        path: join(this.target.path, USER_MEMORY_FILE)
+        path: join(this.target.userPath, USER_MEMORY_FILE)
       },
       {
         scope: "repo" as const,
-        path: join(this.target.path, "repo", REPO_MEMORY_FILE)
+        path: join(this.target.workspacePath, "repo", REPO_MEMORY_FILE)
       },
       {
         scope: "session" as const,
-        path: join(this.target.path, "session", SESSION_MEMORY_FILE)
+        path: join(this.target.workspacePath, "session", SESSION_MEMORY_FILE)
       }
     ];
 

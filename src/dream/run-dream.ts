@@ -16,6 +16,7 @@ import { CopilotSdkProvider } from "../providers/copilot-sdk-provider.js";
 import { buildContext } from "./build-context.js";
 import { readDreamConfig } from "./config.js";
 import { writeProviderDocs } from "./generate-provider-docs.js";
+import { backupMemoryBeforeRun } from "./memory-backup.js";
 import { ConsolidationStage } from "../stages/consolidation-stage.js";
 import { DocumentationStage } from "../stages/documentation-stage.js";
 import { GovernanceStage } from "../stages/governance-stage.js";
@@ -229,6 +230,12 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
     context.diary.push(`config:minSessions=${config.minSessions}`);
     context.diary.push(`config:replayFromStart=${options.replayFromStart === true}`);
     context.diary.push(`config:persistState=${effectivePersistState}`);
+    const backupResult = await backupMemoryBeforeRun(workspaceDir, runId, config);
+    if (backupResult) {
+      context.diary.push(`memory_backup:dir=${backupResult.backupDir}`);
+      context.diary.push(`memory_backup:items=${backupResult.items.length}`);
+      status.update(`memory backup saved items=${backupResult.items.length}`);
+    }
     const loaded = await status.track("loading memory", backend.load());
     context.memories = loaded;
     status.update(`loaded memories=${loaded.length}`);

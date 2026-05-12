@@ -1,11 +1,12 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { join, normalize } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { workspaceStorageDir } from "./dreamer-home.js";
-import { workspaceStorageRoots } from "./discovery/copilot-debug/roots.js";
+import { globalStorageRoots, workspaceStorageRoots } from "./discovery/copilot-debug/roots.js";
 
 const COPILOT_MEMORY_RELATIVE_DIR = join("GitHub.copilot-chat", "memory-tool", "memories");
+const COPILOT_GLOBAL_MEMORY_RELATIVE_DIR = join("github.copilot-chat", "memory-tool", "memories");
 
 function resolveFromSessionLogPath(sessionLogPath?: string): string | undefined {
   if (!sessionLogPath) return undefined;
@@ -21,11 +22,29 @@ function resolveFromSessionLogPath(sessionLogPath?: string): string | undefined 
   return join(root, "workspaceStorage", workspaceHash, COPILOT_MEMORY_RELATIVE_DIR);
 }
 
-export function discoverCopilotMemoryRoot(workspaceDir: string): string | undefined {
-  const fromSessionLog = resolveFromSessionLogPath(process.env.VSCODE_TARGET_SESSION_LOG);
-  if (fromSessionLog) return fromSessionLog;
+function normalizeWorkspacePath(path: string): string {
+  const normalized = normalize(path);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
 
-  const folderUri = pathToFileURL(workspaceDir).toString();
+function folderUriToWorkspacePath(folderUri: string): string | undefined {
+  try {
+    return normalizeWorkspacePath(fileURLToPath(folderUri));
+  } catch {
+    return undefined;
+  }
+}
+
+export function discoverCopilotWorkspaceMemoryRoot(
+  workspaceDir: string,
+  requireExists = true
+): string | undefined {
+  const fromSessionLog = resolveFromSessionLogPath(process.env.VSCODE_TARGET_SESSION_LOG);
+  if (fromSessionLog && (!requireExists || existsSync(fromSessionLog))) return fromSessionLog;
+
+  const candidateWorkspaceDirs = [...new Set([workspaceDir, process.env.DREAMER_ENV_SOURCE_DIR].filter(Boolean) as string[])];
+  const folderUris = new Set(candidateWorkspaceDirs.map((dir) => pathToFileURL(dir).toString()));
+  const folderPaths = new Set(candidateWorkspaceDirs.map((dir) => normalizeWorkspacePath(dir)));
   const roots = workspaceStorageRoots(process.platform, homedir(), process.env);
   for (const root of roots) {
     if (!existsSync(root)) continue;
@@ -36,8 +55,10 @@ export function discoverCopilotMemoryRoot(workspaceDir: string): string | undefi
       if (!existsSync(workspaceJsonPath)) continue;
       try {
         const parsed = JSON.parse(readFileSync(workspaceJsonPath, "utf8")) as { folder?: string };
-        if (parsed.folder === folderUri) {
-          return join(root, entry.name, COPILOT_MEMORY_RELATIVE_DIR);
+        const parsedFolderPath = parsed.folder ? folderUriToWorkspacePath(parsed.folder) : undefined;
+        if ((parsed.folder && folderUris.has(parsed.folder)) || (parsedFolderPath && folderPaths.has(parsedFolderPath))) {
+          const candidate = join(root, entry.name, COPILOT_MEMORY_RELATIVE_DIR);
+          if (!requireExists || existsSync(candidate)) return candidate;
         }
       } catch {
         continue;
@@ -48,6 +69,21 @@ export function discoverCopilotMemoryRoot(workspaceDir: string): string | undefi
   return undefined;
 }
 
+export function discoverCopilotGlobalMemoryRoot(requireExists = true): string | undefined {
+  const globalRoots = globalStorageRoots(process.platform, homedir(), process.env);
+  for (const root of globalRoots) {
+    const candidate = join(root, COPILOT_GLOBAL_MEMORY_RELATIVE_DIR);
+    if (!requireExists || existsSync(candidate)) return candidate;
+  }
+
+  return undefined;
+}
+
+export function discoverCopilotMemoryRoot(workspaceDir: string): string | undefined {
+  return discoverCopilotWorkspaceMemoryRoot(workspaceDir, true) ?? discoverCopilotGlobalMemoryRoot(true);
+}
+
 export function defaultCopilotMemoryTarget(workspaceDir: string): string {
-  return discoverCopilotMemoryRoot(workspaceDir) ?? join(workspaceStorageDir(workspaceDir), "copilot-memory.md");
+  const canonicalWorkspaceDir = process.env.DREAMER_ENV_SOURCE_DIR ?? workspaceDir;
+  return discoverCopilotMemoryRoot(workspaceDir) ?? join(workspaceStorageDir(canonicalWorkspaceDir), "copilot-memory.md");
 }
