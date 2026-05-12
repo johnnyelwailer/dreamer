@@ -8,6 +8,7 @@ import { createSignalTools } from "./signal-stage-tools.js";
 import { runStageAgentPack } from "./stage-agent-pack-execution.js"
 import type { WrittenSession } from "./signal-stage-file-writer.js";
 import { buildSignalCustomAgents } from "./signal-stage-agents.js";
+import { resolveSessionWorkingDirectory, type SessionWorkspaceMode } from "./session-workspace-strategy.js";
 
 type SessionRunArgs = {
   provider: IntelligenceProvider;
@@ -21,6 +22,7 @@ type SessionRunArgs = {
   basePrompt: string;
   orientationPath: string;
   liveStreamEnabled: boolean;
+  sessionWorkspaceMode: SessionWorkspaceMode;
   captured: InsightRecord[];
   onInsight?: (insight: InsightRecord) => void;
   customAgents?: NonNullable<RuntimeStageAgentPackConfig["customAgents"]>;
@@ -45,7 +47,7 @@ export async function loadPrompt(): Promise<string> {
 }
 
 export async function runSignalSession(args: SessionRunArgs): Promise<void> {
-  const { provider, agentPack, context, runDir, writtenSessions, session, runOrdinal, totalRunnableSessions, basePrompt, orientationPath, liveStreamEnabled, captured } = args;
+  const { provider, agentPack, context, runDir, writtenSessions, session, runOrdinal, totalRunnableSessions, basePrompt, orientationPath, liveStreamEnabled, captured, sessionWorkspaceMode } = args;
   const sessionFile = `session-${session.sessionIndex}.md`;
   const messageCount = session.events.filter((event) => event.kind === "message").length;
   const toolCount = session.events.filter((event) => event.kind === "tool").length;
@@ -88,9 +90,15 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
   );
   const currentOrdinal = runOrdinal();
   const streamTag = `signal:${sessionFile}`;
+  const workingDirectory = resolveSessionWorkingDirectory(
+    sessionWorkspaceMode,
+    context.workspaceDir,
+    sessionStart?.metadata.workspaceDir
+  );
+  context.diary.push(`signals:session_workspace:${sessionFile}=${workingDirectory ?? "none"}`);
   ttyWriteTagged(
     "dream",
-    `signal invoking ${sessionFile} run=${currentOrdinal}/${totalRunnableSessions} user_turns=${userTurns} messages=${messageCount} tools=${toolCount}`
+    `signal invoking ${sessionFile} run=${currentOrdinal}/${totalRunnableSessions} user_turns=${userTurns} messages=${messageCount} tools=${toolCount} workspace=${workingDirectory ?? "none"}`
   );
   const scopedPrompt = `${basePrompt}\n\nFocus ONLY on ${sessionFile}. Do not summarize other sessions. Extract durable insights for this session, call record_insight for each one, and call finalize_signal_extraction before finishing.`;
   const prompt = scopedPrompt
@@ -126,6 +134,7 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
       specialistContextPrompt,
       tools,
       streamTag,
+      workingDirectory,
       retries: [
         `Continue only on ${sessionFile}. Call record_insight for any remaining durable findings, then call finalize_signal_extraction before finishing.`
       ],
@@ -156,6 +165,7 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
         tools,
         {
           streamTag: `${streamTag}:finalize`,
+          workingDirectory,
           customAgents: sessionCustomAgents,
           defaultAgent: agentPack?.defaultAgent,
           retries: []

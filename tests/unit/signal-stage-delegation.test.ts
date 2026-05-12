@@ -75,6 +75,27 @@ function createEvents(): NormalizedEvent[] {
   ];
 }
 
+function createEventsWithSessionWorkspace(sessionWorkspaceDir: string): NormalizedEvent[] {
+  return [
+    {
+      id: "e-w1",
+      timestamp: "2026-05-10T00:00:00.000Z",
+      source: "adapter.test",
+      kind: "session_start",
+      text: "",
+      metadata: { sessionId: "session-workspace", workspaceDir: sessionWorkspaceDir }
+    },
+    {
+      id: "e-w2",
+      timestamp: "2026-05-10T00:00:01.000Z",
+      source: "adapter.test",
+      kind: "message",
+      text: "Use transcript workspace.",
+      metadata: { role: "user" }
+    }
+  ];
+}
+
 function createAssistantOnlyEvents(): NormalizedEvent[] {
   return [
     {
@@ -190,6 +211,23 @@ describe("SignalStage delegated mode", () => {
     expect(provider.calls[1]?.options.streamTag).toBe("signal:session-2.md");
     expect(context.diary).toContain("signals:agent_run_start:session-1.md=run_1_of_2");
     expect(context.diary).toContain("signals:agent_run_end:session-2.md=run_2_of_2");
+  });
+
+  it("uses transcript session workspace as provider working directory when enabled", async () => {
+    const workspaceDir = mkdtempSync(join(tmpdir(), "dreamer-signal-stage-"));
+    const sessionWorkspaceDir = join(workspaceDir, "captured-repo");
+    mkdirSync(sessionWorkspaceDir, { recursive: true });
+    tempDirs.push(workspaceDir);
+
+    const provider = new MockProvider();
+    const stage = new SignalStage(provider, undefined, {}, "session-preferred");
+    const context = buildContext(workspaceDir, "run-session-workspace");
+    context.events = createEventsWithSessionWorkspace(sessionWorkspaceDir);
+
+    await stage.run(context);
+
+    expect(provider.calls).toHaveLength(1);
+    expect(provider.calls[0]?.options.workingDirectory).toBe(sessionWorkspaceDir);
   });
 
   it("passes specialist agents to one native Copilot session when signal agent pack is configured", async () => {

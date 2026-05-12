@@ -11,6 +11,7 @@ type StageAgentPackExecutionInput = {
   specialistContextPrompt?: string;
   tools: unknown[];
   streamTag: string;
+  workingDirectory?: string;
   retries?: string[];
   shouldRetry?: () => boolean | Promise<boolean>;
   customAgents?: RunAgentCustomAgentConfig[];
@@ -53,6 +54,7 @@ export async function runStageAgentPack(input: StageAgentPackExecutionInput): Pr
 
     const output = await input.provider.runAgent(specialistPrompt, input.tools, {
       streamTag: `${input.streamTag} specialist:${agentName}`,
+      workingDirectory: input.workingDirectory,
       selectedAgent: agentName,
       customAgents: input.customAgents,
       defaultAgent: input.defaultAgent,
@@ -71,6 +73,7 @@ export async function runStageAgentPack(input: StageAgentPackExecutionInput): Pr
 
   await input.provider.runAgent(mainPrompt, input.tools, {
     streamTag: input.streamTag,
+    workingDirectory: input.workingDirectory,
     retries: input.retries,
     shouldRetry: input.shouldRetry
       ? async () => await input.shouldRetry?.()

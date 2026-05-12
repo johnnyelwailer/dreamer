@@ -162,6 +162,9 @@ Run-time session scope controls:
 pnpm dev run --session-scope newest-first
 pnpm dev run --session-scope oldest-first
 pnpm dev run --session-scope coverage
+pnpm dev run --session-workspace workspace-default
+pnpm dev run --session-workspace session-preferred
+pnpm dev run --session-workspace session-required
 pnpm dev run --max-sessions 25 --since-days 14
 ```
 
@@ -170,6 +173,12 @@ Mode meanings:
 - `newest-first`: newest activity to oldest.
 - `oldest-first`: oldest activity to newest.
 - `coverage`: unprocessed first, then least-recently processed.
+
+Session workspace modes:
+
+- `workspace-default`: always run agent calls in the current Dream workspace.
+- `session-preferred`: use transcript-derived workspace when available, otherwise fallback to current workspace.
+- `session-required`: use transcript-derived workspace only; if missing/unavailable, run without a workspace override.
 
 Scheduled mode can run indefinitely and avoid overlapping runs. It supports per-run limits for gradual full coverage over time:
 

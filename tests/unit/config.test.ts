@@ -13,6 +13,7 @@ const envKeys = [
   "DREAM_RUNTIME_CONFIG_FILE",
   "DREAM_MEMORY_BACKUP_ENABLED",
   "DREAM_COPILOT_SESSION_SCOPE_MODE",
+  "DREAM_COPILOT_SESSION_WORKSPACE_MODE",
   "DREAM_COPILOT_BATCH_SESSIONS",
   "DREAM_STAGE_IMPLEMENTATIONS"
 ] as const;
@@ -138,12 +139,15 @@ describe("readDreamConfig", () => {
 
     const defaultConfig = readDreamConfig(workspaceDir);
     expect(defaultConfig.copilotDebugSessionScopeMode).toBe("newest-first");
+    expect(defaultConfig.copilotDebugSessionWorkspaceMode).toBe("session-preferred");
     expect(defaultConfig.copilotDebugBatchSessions).toBe(3);
 
     process.env.DREAM_COPILOT_SESSION_SCOPE_MODE = "coverage";
+    process.env.DREAM_COPILOT_SESSION_WORKSPACE_MODE = "session-required";
     process.env.DREAM_COPILOT_BATCH_SESSIONS = "7";
     const overridden = readDreamConfig(workspaceDir);
     expect(overridden.copilotDebugSessionScopeMode).toBe("coverage");
+    expect(overridden.copilotDebugSessionWorkspaceMode).toBe("session-required");
     expect(overridden.copilotDebugBatchSessions).toBe(7);
   });
 });

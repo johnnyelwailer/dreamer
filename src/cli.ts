@@ -6,6 +6,7 @@ import { registerInspectCommand } from "./cli/inspect-command.js";
 import { runMetricsSummary, runObservabilitySummary } from "./cli/reports.js";
 import { registerSetupCommand } from "./cli/setup-command.js";
 import type { CopilotSessionScopeMode } from "./adapters/copilot-debug/types.js";
+import type { SessionWorkspaceMode } from "./stages/session-workspace-strategy.js";
 
 const workspaceDir = process.env.DREAMER_WORKSPACE_DIR ?? cwd();
 
@@ -16,6 +17,15 @@ function parseSessionScopeMode(raw: string | undefined, optionName: string): Cop
     return normalized;
   }
   throw new Error(`${optionName} must be one of: newest-first, oldest-first, coverage.`);
+}
+
+function parseSessionWorkspaceMode(raw: string | undefined, optionName: string): SessionWorkspaceMode | undefined {
+  if (!raw) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "workspace-default" || normalized === "session-preferred" || normalized === "session-required") {
+    return normalized;
+  }
+  throw new Error(`${optionName} must be one of: workspace-default, session-preferred, session-required.`);
 }
 
 function parseSessionCount(raw: string | undefined, optionName: string): number | "all" | undefined {
@@ -42,6 +52,10 @@ program
   .option("--batch-sessions <count|all>", "sessions per ingest/pipeline cycle (or all)")
   .option("--since-days <days>", "only include sessions active in the last N days")
   .option("--session-scope <mode>", "session scope mode: newest-first|oldest-first|coverage")
+  .option(
+    "--session-workspace <mode>",
+    "session workspace mode: workspace-default|session-preferred|session-required"
+  )
   .action(async (options: {
     replayFromStart?: boolean;
     persistState?: boolean;
@@ -49,6 +63,7 @@ program
     batchSessions?: string;
     sinceDays?: string;
     sessionScope?: string;
+    sessionWorkspace?: string;
   }) => {
     const maxSessions = parseSessionCount(options.maxSessions, "--max-sessions");
     const batchSessions = parseSessionCount(options.batchSessions, "--batch-sessions");
@@ -59,6 +74,7 @@ program
     }
 
     const sessionScopeMode = parseSessionScopeMode(options.sessionScope, "--session-scope");
+    const sessionWorkspaceMode = parseSessionWorkspaceMode(options.sessionWorkspace, "--session-workspace");
 
     await runDream(workspaceDir, {
       replayFromStart: options.replayFromStart,
@@ -66,7 +82,8 @@ program
       maxSessions,
       batchSessions,
       sinceDays,
-      sessionScopeMode
+      sessionScopeMode,
+      sessionWorkspaceMode
     });
   });
 
@@ -78,6 +95,11 @@ program
   .option("--batch-sessions <count|all>", "sessions per ingest/pipeline cycle (or all)")
   .option("--since-days <days>", "only include sessions active in the last N days")
   .option("--session-scope <mode>", "session scope mode: newest-first|oldest-first|coverage", "coverage")
+  .option(
+    "--session-workspace <mode>",
+    "session workspace mode: workspace-default|session-preferred|session-required",
+    "session-preferred"
+  )
   .option("--once", "run once and exit", false)
   .action(async (options: {
     intervalMs: string;
@@ -86,6 +108,7 @@ program
     batchSessions?: string;
     sinceDays?: string;
     sessionScope?: string;
+    sessionWorkspace?: string;
   }) => {
     const interval = Number(options.intervalMs);
 
@@ -98,12 +121,14 @@ program
     }
 
     const sessionScopeMode = parseSessionScopeMode(options.sessionScope, "--session-scope");
+    const sessionWorkspaceMode = parseSessionWorkspaceMode(options.sessionWorkspace, "--session-workspace");
 
     await runScheduled(workspaceDir, interval, options.once, {
       maxSessions,
       batchSessions,
       sinceDays,
-      sessionScopeMode
+      sessionScopeMode,
+      sessionWorkspaceMode
     });
   });
 

@@ -8,9 +8,10 @@ import { discoverClaudeCodeLogPath, discoverCodexTraceLogPath } from "./adapter-
 import { defaultCopilotMemoryTarget } from "./copilot-memory-path.js";
 import { loadWorkspaceDotenv, readList, readPositiveInteger, readPositiveNumber } from "./config-env.js";
 import { workspaceStorageDir } from "./dreamer-home.js";
-import { readBoolean, readHonchoEnvironment, readSessionScopeMode, type HonchoEnvironment } from "./config-readers.js";
+import { readBoolean, readHonchoEnvironment, readSessionScopeMode, readSessionWorkspaceMode, type HonchoEnvironment } from "./config-readers.js";
 import { mergeStageImplementationBindings, normalizeStageSlotId, parseStageImplementationBindings } from "./stage-implementation-config.js";
 import type { CopilotSessionScopeMode } from "../adapters/copilot-debug/types.js";
+import type { SessionWorkspaceMode } from "../stages/session-workspace-strategy.js";
 
 export type DreamConfig = {
   adapterId: string;
@@ -28,6 +29,7 @@ export type DreamConfig = {
   copilotDebugMaxSessionsPerRun?: number;
   copilotDebugBatchSessions: number;
   copilotDebugSessionScopeMode: CopilotSessionScopeMode;
+  copilotDebugSessionWorkspaceMode: SessionWorkspaceMode;
   jsonlEventsPath: string;
   claudeCodePath: string;
   codexTracePath: string;
@@ -110,6 +112,8 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
     copilotDebugBatchSessions: readPositiveInteger(process.env.DREAM_COPILOT_BATCH_SESSIONS) ?? 3,
     copilotDebugSessionScopeMode:
       readSessionScopeMode(process.env.DREAM_COPILOT_SESSION_SCOPE_MODE) ?? "newest-first",
+    copilotDebugSessionWorkspaceMode:
+      readSessionWorkspaceMode(process.env.DREAM_COPILOT_SESSION_WORKSPACE_MODE) ?? "session-preferred",
     jsonlEventsPath: process.env.DREAM_JSONL_EVENTS_FILE ?? join(fixturesDir, "events.jsonl"),
     claudeCodePath:
       process.env.DREAM_CLAUDE_CODE_FILE ?? discoveredClaudeCodePath ?? join(fixturesDir, "claude-code.jsonl"),

@@ -1,6 +1,7 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { scoreTranscriptRichness } from "./richness.js";
 import type {
   CopilotDiscoveryDeps,
@@ -34,6 +35,7 @@ export function discoverCopilotDebugSessions(
   for (const root of roots) {
     const workspaces = deps.readdir(root);
     for (const workspaceId of workspaces) {
+      const workspaceDir = readWorkspaceDir(root, workspaceId);
       const debugLogsRoot = join(root, workspaceId, "GitHub.copilot-chat", "debug-logs");
       if (!deps.exists(debugLogsRoot)) continue;
       for (const sessionId of deps.readdir(debugLogsRoot)) {
@@ -50,6 +52,7 @@ export function discoverCopilotDebugSessions(
         sessions.push({
           sessionId,
           path: sessionDir,
+          workspaceDir,
           mainJsonlPath: mainJsonl,
           transcriptPath: transcriptExists ? transcriptPath : undefined,
           mainMtimeMs,
@@ -87,5 +90,17 @@ function safeMtimeMs(path: string): number {
     return statSync(path).mtimeMs;
   } catch {
     return 0;
+  }
+}
+
+function readWorkspaceDir(root: string, workspaceId: string): string | undefined {
+  const workspaceJsonPath = join(root, workspaceId, "workspace.json");
+  if (!existsSync(workspaceJsonPath)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(workspaceJsonPath, "utf8")) as { folder?: string };
+    if (!parsed.folder || !parsed.folder.startsWith("file://")) return undefined;
+    return fileURLToPath(parsed.folder);
+  } catch {
+    return undefined;
   }
 }

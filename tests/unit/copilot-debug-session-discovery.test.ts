@@ -1,8 +1,9 @@
 import { mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { discoverCopilotDebugSessionDir } from "../../src/dream/copilot-debug-session-discovery.js";
+import { discoverCopilotDebugSessionDir, discoverCopilotDebugSessions } from "../../src/dream/copilot-debug-session-discovery.js";
 
 const tempDirs: string[] = [];
 
@@ -121,6 +122,28 @@ describe("discoverCopilotDebugSessionDir", () => {
     expect(actual).not.toBe(newerEmpty);
     expect(actual).toBe(richer);
   });
+
+  it("captures workspace directory from workspace.json when available", () => {
+    const home = makeTempHome();
+    const workspaceRoot = join(home, "workspace-target");
+    mkdirSync(workspaceRoot, { recursive: true });
+    createSessionDir({
+      home,
+      base: join("Library", "Application Support", "Code - Insiders", "User", "workspaceStorage"),
+      workspaceId: "workspace-with-folder",
+      sessionId: "session-mapped",
+      mtimeMs: 2000,
+      workspaceFolder: pathToFileURL(workspaceRoot).toString()
+    });
+
+    const sessions = discoverCopilotDebugSessions({
+      platform: "darwin",
+      homeDir: home,
+      env: {}
+    });
+
+    expect(sessions[0]?.workspaceDir).toBe(workspaceRoot);
+  });
 });
 
 function makeTempHome(): string {
@@ -136,6 +159,7 @@ function createSessionDir(input: {
   sessionId: string;
   mtimeMs: number;
   transcriptLines?: string[];
+  workspaceFolder?: string;
 }): string {
   const sessionDir = join(
     input.home,
@@ -148,6 +172,13 @@ function createSessionDir(input: {
   mkdirSync(sessionDir, { recursive: true });
   writeFileSync(join(sessionDir, "main.jsonl"), '{"type":"session_start"}\n', "utf8");
   writeFileSync(join(sessionDir, "models.json"), "[]", "utf8");
+  if (input.workspaceFolder) {
+    writeFileSync(
+      join(input.home, input.base, input.workspaceId, "workspace.json"),
+      JSON.stringify({ folder: input.workspaceFolder }),
+      "utf8"
+    );
+  }
   if (input.transcriptLines?.length) {
     const transcriptsDir = join(
       input.home,

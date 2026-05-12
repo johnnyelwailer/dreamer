@@ -7,6 +7,7 @@ import type { RuntimeStageAgentPackConfig } from "../dream/runtime-manifest.js";
 import { writeSessionFiles } from "./signal-stage-file-writer.js";
 import { isEnabled, loadPrompt, runSignalSession } from "./signal-stage-runner.js";
 import { ttyWriteTagged } from "../shared/tty-log-format.js";
+import type { SessionWorkspaceMode } from "./session-workspace-strategy.js";
 
 export type SignalStageHooks = {
   onInsight?: (context: DreamContext, insight: InsightRecord) => void;
@@ -20,7 +21,8 @@ export class SignalStage implements PipelineStage {
   constructor(
     private readonly provider: IntelligenceProvider,
     private readonly agentPack?: RuntimeStageAgentPackConfig,
-    private readonly hooks: SignalStageHooks = {}
+    private readonly hooks: SignalStageHooks = {},
+    private readonly sessionWorkspaceMode: SessionWorkspaceMode = "session-preferred"
   ) {}
 
   async run(context: DreamContext): Promise<DreamContext> {
@@ -104,6 +106,7 @@ export class SignalStage implements PipelineStage {
         basePrompt,
         orientationPath,
         liveStreamEnabled,
+        sessionWorkspaceMode: this.sessionWorkspaceMode,
         captured,
         onInsight: (insight) => this.hooks.onInsight?.(context, insight),
         customAgents

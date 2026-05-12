@@ -18,6 +18,7 @@ export type CopilotDiscoveryOptions = {
 export type DiscoveredCopilotSession = {
   sessionId: string;
   path: string;
+  workspaceDir?: string;
   mainJsonlPath: string;
   transcriptPath?: string;
   mainMtimeMs: number;

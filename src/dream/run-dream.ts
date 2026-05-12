@@ -30,8 +30,20 @@ import type { DreamRunState, RunDreamOptions } from "./run-dream-types.js";
 import { createTtyStatus } from "../shared/tty-progress.js";
 import { loadDreamerPlugins } from "./plugin-loader.js";
 import { ProviderSessionNamer } from "../core/session-naming.js";
+import type { RuntimeStageAgentPackConfig } from "./runtime-manifest.js";
 
 export type { RunDreamOptions } from "./run-dream-types.js";
+
+type SignalStageFactory = new (
+  provider: IntelligenceProvider,
+  agentPack?: RuntimeStageAgentPackConfig,
+  hooks?: {
+    onInsight?: (context: import("../core/types.js").DreamContext, insight: import("../core/types.js").InsightRecord) => void;
+    onSessionComplete?: (context: import("../core/types.js").DreamContext) => Promise<void> | void;
+    onComplete?: (context: import("../core/types.js").DreamContext) => Promise<void> | void;
+  },
+  sessionWorkspaceMode?: import("../stages/session-workspace-strategy.js").SessionWorkspaceMode
+) => SignalStage;
 
 function formatLimit(value: number | undefined): string {
   return value === undefined ? "all" : String(value);
@@ -141,14 +153,26 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
   const backend = registry.requireBackend(config.backendId);
   const provider = registry.requireProvider(config.providerId);
   const state = new JsonStateStore(JsonStateStore.runStatePath(workspaceDir));
-  const signalStage = new SignalStage(provider, config.stageAgentPacks?.["stage.signal"]);
+  const effectiveSessionWorkspaceMode = options.sessionWorkspaceMode ?? config.copilotDebugSessionWorkspaceMode;
+  const SignalStageCtor = SignalStage as unknown as SignalStageFactory;
+  const signalStage = new SignalStageCtor(
+    provider,
+    config.stageAgentPacks?.["stage.signal"],
+    {},
+    effectiveSessionWorkspaceMode
+  );
   registry.registerStage(signalStage);
   let honchoSignalImplementation: HonchoSignalIngestionImplementation | undefined;
-  const honchoSignalStage = new SignalStage(provider, config.stageAgentPacks?.["stage.signal"], {
-    onInsight: (context, insight) => honchoSignalImplementation?.recordInsight(context, insight),
-    onSessionComplete: (context) => honchoSignalImplementation?.flushPending(context, "session"),
-    onComplete: (context) => honchoSignalImplementation?.complete(context)
-  });
+  const honchoSignalStage = new SignalStageCtor(
+    provider,
+    config.stageAgentPacks?.["stage.signal"],
+    {
+      onInsight: (context, insight) => honchoSignalImplementation?.recordInsight(context, insight),
+      onSessionComplete: (context) => honchoSignalImplementation?.flushPending(context, "session"),
+      onComplete: (context) => honchoSignalImplementation?.complete(context)
+    },
+    effectiveSessionWorkspaceMode
+  );
   honchoSignalImplementation = new HonchoSignalIngestionImplementation(honchoSignalStage, workspaceDir, {
     workspaceId: config.honchoWorkspaceId,
     apiKey: config.honchoApiKey,
@@ -176,7 +200,7 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
     const effectivePersistState = options.persistState !== false;
     status.update(
       `config maxSessions=${formatLimit(configuredMaxSessions)} batchSessions=${formatLimit(configuredBatchSessions)} ` +
-        `sinceDays=${effectiveSinceDays} sessionScope=${effectiveSessionScopeMode} minSessions=${config.minSessions} ` +
+        `sinceDays=${effectiveSinceDays} sessionScope=${effectiveSessionScopeMode} sessionWorkspace=${effectiveSessionWorkspaceMode} minSessions=${config.minSessions} ` +
         `replayFromStart=${options.replayFromStart === true} persistState=${effectivePersistState}`
     );
     context.diary.push(`config:adapter=${config.adapterId}`);
@@ -188,6 +212,7 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
     context.diary.push(`config:batchSessions=${formatLimit(configuredBatchSessions)}`);
     context.diary.push(`config:sinceDays=${effectiveSinceDays}`);
     context.diary.push(`config:sessionScope=${effectiveSessionScopeMode}`);
+    context.diary.push(`config:sessionWorkspace=${effectiveSessionWorkspaceMode}`);
     context.diary.push(`config:minSessions=${config.minSessions}`);
     context.diary.push(`config:replayFromStart=${options.replayFromStart === true}`);
     context.diary.push(`config:persistState=${effectivePersistState}`);
@@ -305,7 +330,7 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
       `memories_created=${context.metrics.memoriesAdded} memories_updated=${context.metrics.memoriesUpdated} ` +
       `memories_removed=${context.metrics.contradictionsFound} final_memory_count=${context.memories.length} ` +
       `config(maxSessions=${formatLimit(configuredMaxSessions)} batchSessions=${formatLimit(configuredBatchSessions)} ` +
-      `sinceDays=${effectiveSinceDays} sessionScope=${effectiveSessionScopeMode} minSessions=${config.minSessions})`;
+      `sinceDays=${effectiveSinceDays} sessionScope=${effectiveSessionScopeMode} sessionWorkspace=${effectiveSessionWorkspaceMode} minSessions=${config.minSessions})`;
     context.diary.push(`run:summary=${runSummary}`);
     status.done(runSummary);
   } finally {

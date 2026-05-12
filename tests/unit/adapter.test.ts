@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { CopilotDebugAdapter } from "../../src/adapters/copilot-debug-adapter.js";
 import { JsonlEventAdapter } from "../../src/adapters/jsonl-event-adapter.js";
 
@@ -78,6 +79,39 @@ describe("CopilotDebugAdapter", () => {
       expect(messageEvents.length).toBeGreaterThan(0);
       expect(toolEvents.length).toBeGreaterThan(0);
       expect(result.events.some((event) => event.text.includes("diagnostics"))).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("emits session workspace metadata when workspace.json is available", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dreamer-copilot-adapter-"));
+    const workspaceStorageRoot = join(root, "workspaceStorage");
+    const workspaceId = "workspace-abc";
+    const workspaceDir = join(root, "repo-target");
+    const sessionId = "session-workspace";
+    const sessionDir = join(workspaceStorageRoot, workspaceId, "GitHub.copilot-chat", "debug-logs", sessionId);
+
+    try {
+      mkdirSync(sessionDir, { recursive: true });
+      mkdirSync(workspaceDir, { recursive: true });
+      writeFileSync(join(sessionDir, "main.jsonl"), JSON.stringify({ type: "session_start", sid: sessionId }) + "\n", "utf8");
+      writeFileSync(join(sessionDir, "models.json"), "[]", "utf8");
+      writeFileSync(
+        join(workspaceStorageRoot, workspaceId, "workspace.json"),
+        JSON.stringify({ folder: pathToFileURL(workspaceDir).toString() }),
+        "utf8"
+      );
+
+      const adapter = new CopilotDebugAdapter({
+        discoveryMode: "override",
+        searchPaths: [workspaceStorageRoot],
+        maxSessionsPerRun: 1
+      });
+      const result = await adapter.ingest();
+      const sessionStart = result.events.find((event) => event.kind === "session_start");
+
+      expect(sessionStart?.metadata.workspaceDir).toBe(workspaceDir);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
