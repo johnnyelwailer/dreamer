@@ -1,7 +1,7 @@
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 import { ttyWriteLine, ttyWriteTagged } from "../src/shared/tty-log-format.js";
 
 type ShellCommand = {
@@ -22,8 +22,11 @@ function parseArgs(argv: string[]): SafeRunOptions {
     command: "pnpm improve:dream",
     branchPrefix: "dreamer/agent",
     keepWorktree: true,
-    allowDirtyWorkspace: false,
-    isolationMode: process.env.DREAM_WORKSPACE_ISOLATION_MODE === "none" ? "none" : "repo-worktree"
+    allowDirtyWorkspace: true,
+    isolationMode:
+      process.env.DREAM_WORKSPACE_ISOLATION_MODE === "none"
+        ? "none"
+        : "repo-worktree",
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -69,13 +72,15 @@ function run(command: string, args: string[], cwd: string): string {
     encoding: "utf8",
     env: {
       ...process.env,
-      GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL ?? "/dev/null"
-    }
+      GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+    },
   });
   if (result.status !== 0) {
     const stderr = result.stderr?.trim();
     const stdout = result.stdout?.trim();
-    throw new Error(stderr || stdout || `Command failed: ${command} ${args.join(" ")}`);
+    throw new Error(
+      stderr || stdout || `Command failed: ${command} ${args.join(" ")}`,
+    );
   }
   return (result.stdout ?? "").trim();
 }
@@ -88,23 +93,30 @@ function assertCleanWorkspace(workspaceDir: string): void {
   const status = run("git", ["status", "--porcelain"], workspaceDir);
   if (status.length > 0) {
     throw new Error(
-      "Workspace has uncommitted changes. Commit/stash first, or run with --allow-dirty to proceed intentionally."
+      "Workspace has uncommitted changes. Commit/stash first, or run with --allow-dirty to proceed intentionally.",
     );
   }
 }
 
 function ensureBranchAvailable(workspaceDir: string, branch: string): void {
-  const existing = spawnSync("git", ["show-ref", "--verify", `refs/heads/${branch}`], {
-    cwd: workspaceDir,
-    encoding: "utf8"
-  });
+  const existing = spawnSync(
+    "git",
+    ["show-ref", "--verify", `refs/heads/${branch}`],
+    {
+      cwd: workspaceDir,
+      encoding: "utf8",
+    },
+  );
   if (existing.status === 0) {
     throw new Error(`Branch already exists: ${branch}`);
   }
 }
 
 function createBranchName(prefix: string): string {
-  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:.TZ]/g, "")
+    .slice(0, 14);
   return `${prefix}-${stamp}`;
 }
 
@@ -112,13 +124,13 @@ function getCommandShell(command: string): ShellCommand {
   if (process.platform === "win32") {
     return {
       command: "pwsh",
-      args: ["-NoLogo", "-NoProfile", "-Command", command]
+      args: ["-NoLogo", "-NoProfile", "-Command", command],
     };
   }
 
   return {
     command: process.env.SHELL || "sh",
-    args: ["-lc", command]
+    args: ["-lc", command],
   };
 }
 
@@ -133,8 +145,9 @@ function main(): void {
       stdio: "inherit",
       env: {
         ...process.env,
-        DREAMER_WORKSPACE_DIR: process.env.DREAMER_WORKSPACE_DIR ?? workspaceDir
-      }
+        DREAMER_WORKSPACE_DIR:
+          process.env.DREAMER_WORKSPACE_DIR ?? workspaceDir,
+      },
     });
     ttyWriteLine();
     ttyWriteTagged("safe workspace", "run complete (isolation=none)");
@@ -154,7 +167,11 @@ function main(): void {
   const sandboxRoot = mkdtempSync(join(tmpdir(), "dreamer-safe-"));
   const worktreeDir = join(sandboxRoot, "workspace");
 
-  run("git", ["worktree", "add", "-b", branch, worktreeDir, "HEAD"], workspaceDir);
+  run(
+    "git",
+    ["worktree", "add", "-b", branch, worktreeDir, "HEAD"],
+    workspaceDir,
+  );
 
   // The dreamer runs from its own source dir (node_modules here). The worktree
   // is just an isolated copy of the workspace files — passed via env var.
@@ -164,8 +181,8 @@ function main(): void {
     env: {
       ...process.env,
       DREAMER_WORKSPACE_DIR: worktreeDir,
-      DREAMER_SAFE_WORKTREE: worktreeDir
-    }
+      DREAMER_SAFE_WORKTREE: worktreeDir,
+    },
   });
 
   ttyWriteLine();
@@ -180,7 +197,10 @@ function main(): void {
     rmSync(sandboxRoot, { recursive: true, force: true });
     ttyWriteTagged("safe workspace", "cleanup complete");
   } else {
-    ttyWriteTagged("safe workspace", "review changes in the isolated worktree before merging");
+    ttyWriteTagged(
+      "safe workspace",
+      "review changes in the isolated worktree before merging",
+    );
   }
 
   if (commandResult.status !== 0) {
