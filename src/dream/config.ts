@@ -54,10 +54,18 @@ export type DreamConfig = {
 };
 
 export function readDreamConfig(workspaceDir: string): DreamConfig {
+  const envSourceDir = process.env.DREAMER_ENV_SOURCE_DIR;
   try {
     loadWorkspaceDotenv(workspaceDir);
   } catch {
     // Missing .env.local is expected.
+  }
+  if (envSourceDir && envSourceDir !== workspaceDir) {
+    try {
+      loadWorkspaceDotenv(envSourceDir);
+    } catch {
+      // Missing source .env.local is expected.
+    }
   }
   const storageDir = workspaceStorageDir(workspaceDir);
   const fixturesDir = join(storageDir, "fixtures");

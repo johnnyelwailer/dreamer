@@ -145,6 +145,7 @@ function main(): void {
       stdio: "inherit",
       env: {
         ...process.env,
+        DREAMER_ENV_SOURCE_DIR: process.env.DREAMER_ENV_SOURCE_DIR ?? workspaceDir,
         DREAMER_WORKSPACE_DIR:
           process.env.DREAMER_WORKSPACE_DIR ?? workspaceDir,
       },
@@ -180,6 +181,7 @@ function main(): void {
     stdio: "inherit",
     env: {
       ...process.env,
+      DREAMER_ENV_SOURCE_DIR: process.env.DREAMER_ENV_SOURCE_DIR ?? workspaceDir,
       DREAMER_WORKSPACE_DIR: worktreeDir,
       DREAMER_SAFE_WORKTREE: worktreeDir,
     },

@@ -7,6 +7,8 @@ import { runMetricsSummary, runObservabilitySummary } from "./cli/reports.js";
 import { registerSetupCommand } from "./cli/setup-command.js";
 import type { CopilotSessionScopeMode } from "./adapters/copilot-debug/types.js";
 
+const workspaceDir = process.env.DREAMER_WORKSPACE_DIR ?? cwd();
+
 function parseSessionScopeMode(raw: string | undefined, optionName: string): CopilotSessionScopeMode | undefined {
   if (!raw) return undefined;
   const normalized = raw.trim().toLowerCase();
@@ -58,7 +60,7 @@ program
 
     const sessionScopeMode = parseSessionScopeMode(options.sessionScope, "--session-scope");
 
-    await runDream(cwd(), {
+    await runDream(workspaceDir, {
       replayFromStart: options.replayFromStart,
       persistState: options.persistState,
       maxSessions,
@@ -97,7 +99,7 @@ program
 
     const sessionScopeMode = parseSessionScopeMode(options.sessionScope, "--session-scope");
 
-    await runScheduled(cwd(), interval, options.once, {
+    await runScheduled(workspaceDir, interval, options.once, {
       maxSessions,
       batchSessions,
       sinceDays,
@@ -111,14 +113,14 @@ program
   .command("metrics")
   .description("Show numeric run counters from reports/metrics.json")
   .action(async () => {
-    await runMetricsSummary(cwd());
+    await runMetricsSummary(workspaceDir);
   });
 
 program
   .command("status")
   .description("Show report file status and latest run metadata")
   .action(async () => {
-    await runObservabilitySummary(cwd());
+    await runObservabilitySummary(workspaceDir);
   });
 
 registerInspectCommand(program);

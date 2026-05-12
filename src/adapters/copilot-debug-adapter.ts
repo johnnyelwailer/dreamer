@@ -1,4 +1,4 @@
-import { join, normalize } from "node:path";
+import { basename, join, normalize } from "node:path";
 import type { AdapterProgress, TranscriptAdapter } from "../core/contracts.js";
 import type { NormalizedEvent } from "../core/types.js";
 import {
@@ -117,7 +117,7 @@ export class CopilotDebugAdapter implements TranscriptAdapter {
     const fallback = this.readOptions().fallbackSessionDir;
     if (!fallback) return filtered;
     if (filtered.some((session) => normalize(session.path) === normalize(fallback))) return filtered;
-    const sessionId = normalize(fallback).split("/").pop() ?? "fallback-session";
+    const sessionId = basename(normalize(fallback)) || "fallback-session";
     filtered.push({
       sessionId,
       path: fallback,

@@ -242,6 +242,13 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
       context.diary.push(`ingest:events=${ingest.events.length}`);
       context.diary.push(`ingest:sessions=${sessions}`);
       context.diary.push(`ingest:cursor=${String(ingest.cursor ?? "none")}`);
+        if (ingest.events.length > 0 && sessions === 0) {
+          const reason = "events_ingested_without_session_start (likely incremental cursor filtering on session_start)";
+          context.diary.push(`ingest:no_session_starts reason=${reason}`);
+          status.update(
+            `ingest cycle=${cycle} has events (${ingest.events.length}) but 0 new session_start; ${reason}`
+          );
+        }
       if (ingest.progress) {
         context.diary.push(
           `ingest:progress=${ingest.progress.completedUnits}/${ingest.progress.totalUnits} (${ingest.progress.completionPercent}%)`

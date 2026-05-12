@@ -6,6 +6,7 @@ import type { DreamContext, InsightRecord } from "../core/types.js";
 import type { RuntimeStageAgentPackConfig } from "../dream/runtime-manifest.js";
 import { writeSessionFiles } from "./signal-stage-file-writer.js";
 import { isEnabled, loadPrompt, runSignalSession } from "./signal-stage-runner.js";
+import { ttyWriteTagged } from "../shared/tty-log-format.js";
 
 export type SignalStageHooks = {
   onInsight?: (context: DreamContext, insight: InsightRecord) => void;
@@ -45,6 +46,23 @@ export class SignalStage implements PipelineStage {
       );
       return count + (hasUserTurns ? 1 : 0);
     }, 0);
+    const skippedNoUserTurns = writtenSessions.length - totalRunnableSessions;
+    context.diary.push(
+      `signals:eligibility total=${writtenSessions.length} runnable=${totalRunnableSessions} skipped_no_user_turns=${skippedNoUserTurns}`
+    );
+    ttyWriteTagged(
+      "dream",
+      `signal eligibility sessions_total=${writtenSessions.length} runnable=${totalRunnableSessions} skipped_no_user_turns=${skippedNoUserTurns}`,
+      { noisy: true }
+    );
+    if (totalRunnableSessions === 0) {
+      context.diary.push("signals:agent_not_invoked reason=no_user_turns");
+      ttyWriteTagged(
+        "dream",
+        "signal agent not invoked: all discovered sessions had 0 user turns",
+        { noisy: true }
+      );
+    }
 
     const captured: InsightRecord[] = [];
     const orientationPath = join(runDir, "orientation.md");

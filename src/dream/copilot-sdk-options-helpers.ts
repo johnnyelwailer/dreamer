@@ -14,10 +14,40 @@ export function readEnvValue(primary?: string, fallback?: string): string | unde
 }
 
 export function buildClientEnv(extraEnvVars: string[]): Record<string, string | undefined> | undefined {
-  if (!extraEnvVars.length) return undefined;
   const env: Record<string, string | undefined> = {};
   for (const envVar of extraEnvVars) env[envVar] = process.env[envVar];
-  return env;
+
+  // Explicit opt-in for environments that must bypass TLS verification.
+  // This is insecure and intended only for trusted internal endpoints.
+  const insecureTls = readBooleanEnv("DREAM_INSECURE_TLS");
+  if (insecureTls === true && !env.NODE_TLS_REJECT_UNAUTHORIZED) {
+    env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  }
+
+  // Preserve network/TLS settings for the SDK subprocess. Without this,
+  // machine-specific CA/proxy config in the parent process is ignored.
+  const passthroughEnvVars = [
+    "NODE_EXTRA_CA_CERTS",
+    "NODE_TLS_REJECT_UNAUTHORIZED",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "NO_PROXY"
+  ];
+  for (const envVar of passthroughEnvVars) {
+    if (env[envVar] !== undefined) continue;
+    const value = process.env[envVar];
+    if (value && value.trim().length > 0) env[envVar] = value;
+  }
+
+  // Keep CLI subprocess logs clean unless explicitly opted out.
+  const suppressNodeWarnings = readBooleanEnv("DREAM_SUPPRESS_NODE_WARNINGS");
+  if (suppressNodeWarnings !== false) {
+    env.NODE_NO_WARNINGS = process.env.NODE_NO_WARNINGS ?? "1";
+  }
+
+  return Object.keys(env).length > 0 ? env : undefined;
 }
 
 export function readPositiveIntEnv(name: string): number | undefined {

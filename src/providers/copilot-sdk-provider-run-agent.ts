@@ -120,7 +120,13 @@ export async function runCopilotSdkAgent(options: CopilotSdkProviderOptions, pro
     }
     return lastOutput;
   } catch (error) {
-    return `${COPILOT_SDK_PROVIDER_REQUEST_FAILED}: ${String(error)}`;
+    const raw = String(error);
+    const baseUrl = options.sessionConfig.provider?.baseUrl;
+    const tlsHint =
+      baseUrl && raw.includes("Connection error")
+        ? ` Hint: connection to ${baseUrl} failed in SDK transport. If this host uses an internal/self-signed CA, configure NODE_EXTRA_CA_CERTS (preferred) or NODE_TLS_REJECT_UNAUTHORIZED=0 (insecure, temporary).`
+        : "";
+    return `${COPILOT_SDK_PROVIDER_REQUEST_FAILED}: ${raw}${tlsHint}`;
   } finally {
     await client.stop().catch(() => undefined);
   }

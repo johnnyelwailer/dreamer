@@ -47,10 +47,24 @@ export async function loadPrompt(): Promise<string> {
 export async function runSignalSession(args: SessionRunArgs): Promise<void> {
   const { provider, agentPack, context, runDir, writtenSessions, session, runOrdinal, totalRunnableSessions, basePrompt, orientationPath, liveStreamEnabled, captured } = args;
   const sessionFile = `session-${session.sessionIndex}.md`;
+  const messageCount = session.events.filter((event) => event.kind === "message").length;
+  const toolCount = session.events.filter((event) => event.kind === "tool").length;
+  const firstUserMessage = session.events.find(
+    (event) => event.kind === "message" && String(event.metadata.role ?? "") === "user"
+  );
+  const firstAnyMessage = session.events.find((event) => event.kind === "message");
+  const firstUserPromptPreview = (firstUserMessage?.text ?? "").replace(/\s+/g, " ").trim().slice(0, 180);
+  const firstMessagePreview = (firstAnyMessage?.text ?? "").replace(/\s+/g, " ").trim().slice(0, 180);
   const userTurns = session.events.filter((event) => event.kind === "message" && String(event.metadata.role ?? "") === "user").length;
   if (userTurns === 0) {
     context.diary.push(`signals:skipped_no_user_turns=${sessionFile}`);
-    ttyWriteTagged("dream", `signal skipped ${sessionFile} user_turns=0`);
+    context.diary.push(
+      `signals:skipped_initial_user_prompt=${sessionFile}:${firstUserPromptPreview || "(none)"}`
+    );
+    ttyWriteTagged(
+      "dream",
+      `signal skipped ${sessionFile} reason=no_user_turns user_turns=0 messages=${messageCount} tools=${toolCount} initial_user_prompt="${firstUserPromptPreview || "(none)"}" first_message="${firstMessagePreview || "(none)"}"`
+    );
     return;
   }
 
@@ -74,6 +88,10 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
   );
   const currentOrdinal = runOrdinal();
   const streamTag = `signal:${sessionFile}`;
+  ttyWriteTagged(
+    "dream",
+    `signal invoking ${sessionFile} run=${currentOrdinal}/${totalRunnableSessions} user_turns=${userTurns} messages=${messageCount} tools=${toolCount}`
+  );
   const scopedPrompt = `${basePrompt}\n\nFocus ONLY on ${sessionFile}. Do not summarize other sessions. Extract durable insights for this session, call record_insight for each one, and call finalize_signal_extraction before finishing.`;
   const prompt = scopedPrompt
     .replace("{{run_dir}}", runDir)
@@ -118,6 +136,7 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
     });
   } catch (error) {
     context.diary.push(`signals:agent_error:${sessionFile}=${String(error).slice(0, 120)}`);
+    ttyWriteTagged("dream", `signal agent error ${sessionFile}: ${String(error).slice(0, 120)}`);
   } finally {
     if (liveStreamEnabled) {
       ttyWriteTagged("dream", `signal run end ${currentOrdinal}/${totalRunnableSessions} ${sessionFile}`, { noisy: true });
@@ -144,15 +163,21 @@ export async function runSignalSession(args: SessionRunArgs): Promise<void> {
       );
     } catch (error) {
       context.diary.push(`signals:agent_error:${sessionFile}=${String(error).slice(0, 120)}`);
+      ttyWriteTagged("dream", `signal finalize error ${sessionFile}: ${String(error).slice(0, 120)}`);
     }
   }
 
   if (!finalVerdict.current) {
     context.diary.push(`signals:missing_final_verdict=${sessionFile}`);
     context.diary.push(`signals:user_message=Signal extraction must call finalize_signal_extraction to finish ${sessionFile}.`);
+    ttyWriteTagged("dream", `signal incomplete ${sessionFile}: missing finalize_signal_extraction`);
     return;
   }
 
   context.diary.push(`signals:final_status:${sessionFile}=${finalVerdict.current.status}`);
+  ttyWriteTagged(
+    "dream",
+    `signal complete ${sessionFile} status=${finalVerdict.current.status} insights=${sessionCaptured.length}`
+  );
   captured.push(...sessionCaptured);
 }
