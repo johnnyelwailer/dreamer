@@ -1,199 +1,88 @@
 # Dreamer
 
-Dreamer is a local-first, pluggable system that turns coding-session transcripts into durable memory and generated docs.
+Dreamer is a local-first, pluggable system that reflects on AI coding sessions and turns them into durable memory plus reusable project documentation.
 
-This repository is brand new and still WIP. APIs, defaults, and workflows are expected to change.
+## Why This Exists
 
-## Setup Experience
+Coding agents are fast, but project context is fragile. Important decisions, fixes, and patterns get buried in session history.
 
-1. Install dependencies:
+Dreamer is built to make those lessons durable so future sessions can start with stronger context instead of relearning the same things.
+
+## How It Works (Basic Pipeline)
+
+At a high level, one dream run does this:
+
+1. Ingest transcript events from one or more sources.
+2. Detect important signals (decisions, fixes, pitfalls, preferences).
+3. Consolidate those signals into structured memory records.
+4. Optionally generate project documentation and reports (currently not implemented and not the current focus).
+
+Outputs are written to generated docs, reports, and the selected memory backend.
+
+For a detailed stage-by-stage view, see [docs/generated/pipeline-stages.md](docs/generated/pipeline-stages.md).
+
+## Requirements
+
+Before your first run, decide:
+
+- Intelligence provider mode: Copilot or BYOK/OpenAI-compatible endpoint.
+- Memory backend: file, Copilot memory, or Honcho.
+- Transcript source: choose one of the currently supported adapters.
+
+Currently supported transcript adapters:
+
+- Copilot debug sessions (`adapter.copilot.debug`)
+- Codex trace sessions (`adapter.codex.trace`)
+- Claude Code traces (`adapter.claude.code`)
+- Generic JSONL event logs (`adapter.jsonl.event`)
+
+See [docs/getting-started.md](docs/getting-started.md) for setup flow and [docs/plugins.md](docs/plugins.md) for extending adapters/backends/providers.
+
+## Most Important Commands
+
+Install dependencies:
 
 ```bash
 pnpm install
 ```
 
-2. Run the setup wizard:
+Run one dream cycle:
+
+```bash
+pnpm dream
+```
+
+Optional first-time configuration:
 
 ```bash
 pnpm dev setup
 ```
 
-3. Run one dream cycle:
+## Features And Implementation Status
 
-```bash
-pnpm dream
-```
+- Basic dreaming pipeline (ingest -> signal -> consolidate -> report): implemented
+- Local-first workflow with isolated run mode: implemented
+- Multiple transcript adapters: implemented
+- Multiple memory backends (file, Copilot, Honcho): implemented
+- Plugin system (adapters/backends/stages/providers): implemented, still evolving
+- Runtime/provider matrix hardening across all combinations: partial
+- Long-running scheduling and production hardening: partial
 
-What setup does today:
-- selects transcript adapter, memory backend, and agent harness/runtime settings (provider mode/auth mode/model)
-- writes runtime config and `.env.local` fallbacks
-- can run basic provider verification
+Testing notes (important):
 
-## Pluggable Categories
+- Most features are currently not thoroughly tested.
+- Transcript adapter testing is limited today: Copilot is tested; Codex and Claude adapters are currently untested.
 
-Dreamer currently has three main pluggable surfaces:
+## Future Improvements
 
-- transcript adapters
-  - ingest conversation/session data into normalized events
-- memory systems (backends)
-  - load/save final memory records
-- agent harness/runtime
-  - runs the model/tool loop (currently via Copilot SDK runtime)
+- Multi-backend memory operation in the same run, including clear merge/sync semantics and possible read/write role separation per backend.
+- Broader ecosystem support, including validated Codex and Claude flows plus OpenCode-style memory integration.
+- Self-documentation and self-refinement stages (for example AGENTS/Claude guidance and skills auto-refinement as follow-up stages).
 
-## Transcript Adapters
+## Read More
 
-Built-in adapters today:
-
-- `adapter.copilot.debug`
-- `adapter.codex.trace`
-- `adapter.claude.code`
-- `adapter.jsonl.event`
-
-These are selectable in setup and can be replaced by plugin adapters.
-
-## Agent Harness Runtime
-
-The current harness uses the Copilot SDK runtime with two provider modes:
-
-- `copilot`
-  - auth: `logged-in-user`, `github-token`, `session-github-token`
-  - supports GitHub.com and GitHub Enterprise host forwarding (`GITHUB_HOST`)
-- `byok`
-  - supports OpenAI-compatible endpoint wiring
-  - setup options include provider types `openai`, `azure`, `anthropic`
-  - common path today is OpenAI-compatible endpoint + model id
-
-## Agent Harness Setup Examples
-
-### 1) Copilot account (logged-in user)
-
-```bash
-pnpm dev setup --yes \
-  --provider-mode copilot \
-  --auth-mode logged-in-user \
-  --model gpt-4o
-```
-
-### 2) Copilot with GitHub token
-
-```bash
-export GITHUB_TOKEN=YOUR_TOKEN
-pnpm dev setup --yes \
-  --provider-mode copilot \
-  --auth-mode github-token \
-  --model gpt-4o
-```
-
-### 3) BYOK OpenAI-compatible endpoint
-
-```bash
-cp .env.example .env.local
-```
-
-Set in `.env.local`:
-
-```bash
-COPILOT_SDK_BASE_URL=http://localhost:11434/v1
-COPILOT_SDK_API_KEY=YOUR_KEY
-```
-
-Then run:
-
-```bash
-pnpm dev setup --yes \
-  --provider-mode byok \
-  --auth-mode none \
-  --provider-type openai \
-  --wire-api completions \
-  --model gpt-4o \
-  --base-url-env COPILOT_SDK_BASE_URL
-```
-
-## Memory Systems And Integration
-
-Built-in backends:
-- `backend.file.memory`
-  - writes JSON memory snapshot to `~/.dreamer/workspaces/<workspace-id>/memory.json`
-- `backend.copilot.memory`
-  - writes Copilot-style JSON to `~/.dreamer/workspaces/<workspace-id>/copilot-memory.json`
-- `backend.honcho.memory`
-  - syncs memory to Honcho and also exports local snapshot to `~/.dreamer/workspaces/<workspace-id>/honcho/workspace.json`
-
-To use Honcho backend, set one of:
-- `HONCHO_API_KEY`, `HONCHO_WORKSPACE_ID`
-- or `DREAM_HONCHO_*` overrides
-
-Honcho scoping follows Honcho's application/peer/session model:
-- `HONCHO_WORKSPACE_ID` is the Dreamer/tool namespace, defaulting to `dreamer`.
-- Dreamer reuses repo-scoped Honcho sessions such as `dreamer-memory-<repo>` and `raw-<repo>`.
-- The user, Dreamer, and memory scopes are represented as peers; source transcript session ids, run ids, repo URL, branch, and commit are stored as metadata.
-
-Custom backends/adapters/agent-runtime providers/stages can be added through plugins. See `docs/plugins.md`.
-
-## What To Expect
-
-After a run (`pnpm dream`), you should expect:
-- generated docs under `docs/generated/`
-- run outputs under `reports/` and `reports/evals/` (when evals are run)
-- memory snapshots stored under `~/.dreamer/workspaces/<workspace-id>/`
-
-Primary workflows:
-
-```bash
-pnpm dream
-pnpm dream:honcho
-pnpm eval:dream-quality
-pnpm improve:dream
-```
-
-- `pnpm dream` runs in isolated repo worktree mode.
-- `pnpm dream:honcho` runs Honcho in isolated repo worktree mode.
-
-Session scoping controls:
-
-```bash
-pnpm dev run --max-sessions 20 --session-scope newest-first
-pnpm dev run --session-scope oldest-first
-pnpm dev run --session-scope coverage
-```
-
-- `newest-first` processes sessions from newest activity to oldest.
-- `oldest-first` processes sessions from oldest activity to newest.
-- `coverage` prioritizes sessions that have never been processed, then least-recently processed sessions.
-
-Scheduled runs support the same controls and default to coverage mode:
-
-```bash
-pnpm dev schedule --interval-ms 3600000 --max-sessions 20
-```
-
-## Current Implementation State
-
-This project is functional but still early-stage.
-
-Working today:
-- setup wizard and runtime manifest wiring
-- multiple transcript adapters and memory backends
-- agent harness mode/auth configuration via Copilot SDK runtime
-- generated docs + eval report pipeline
-
-Tested with reasonable confidence so far:
-- memory extraction from transcripts
-- the dreaming pipeline end-to-end flow
-- dream-quality evaluation flow (primarily a development verification feature)
-
-Still changing / missing maturity:
-- some runtime defaults and UX are still being refined
-- cross-runtime/provider behavior is not fully exercised in all combinations
-- actual memory backend behavior is not fully tested across all backends
-- Windows support is not fully tested
-- plugin contracts may evolve
-- long-running scheduling and operational hardening are still limited
-- broader production scenarios are still not fully tested yet
-- CI/test matrix coverage is still incomplete in several areas
-
-## Useful Docs
-
-- `docs/getting-started.md`
-- `docs/plugins.md`
-- `.env.example`
+- Getting started and setup details: [docs/getting-started.md](docs/getting-started.md)
+- Product vision and goals: [docs/prd.md](docs/prd.md)
+- Plugin authoring and loading: [docs/plugins.md](docs/plugins.md)
+- Pipeline stage deep dive: [docs/generated/pipeline-stages.md](docs/generated/pipeline-stages.md)
+- Environment template: [.env.example](.env.example)
