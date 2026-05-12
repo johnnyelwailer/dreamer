@@ -2,12 +2,12 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { MemoryBackend } from "../core/contracts.js";
 import type { MemoryRecord } from "../core/types.js";
+import { MEMORY_CATEGORIES, type MemoryCategory } from "../core/types.js";
 import {
   defaultCopilotMemoryTarget,
   discoverCopilotGlobalMemoryRoot,
   discoverCopilotWorkspaceMemoryRoot,
 } from "../dream/copilot-memory-path.js";
-import { MEMORY_CATEGORIES, type MemoryCategory } from "../core/types.js";
 
 type CopilotMemoryDoc = {
   version: string;
@@ -46,7 +46,11 @@ function bulletMarkdown(records: MemoryRecord[]): string {
 
 function categorySlug(record: MemoryRecord): string {
   const raw = record.context?.category ?? "other";
-  const slug = raw.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const slug = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return slug.length > 0 ? slug : "other";
 }
 
@@ -59,7 +63,9 @@ function inferCategoryFromPath(path: string): string | undefined {
 function normalizeCategoryValue(value?: string): MemoryCategory | undefined {
   if (!value) return undefined;
   const normalized = value.trim().toLowerCase();
-  return MEMORY_CATEGORIES.includes(normalized as (typeof MEMORY_CATEGORIES)[number])
+  return MEMORY_CATEGORIES.includes(
+    normalized as (typeof MEMORY_CATEGORIES)[number],
+  )
     ? (normalized as (typeof MEMORY_CATEGORIES)[number])
     : undefined;
 }
@@ -71,10 +77,17 @@ function normalizeComparablePath(value?: string): string | undefined {
 }
 
 function pathsMatch(left?: string, right?: string): boolean {
-  return Boolean(left && right && normalizeComparablePath(left) === normalizeComparablePath(right));
+  return Boolean(
+    left &&
+    right &&
+    normalizeComparablePath(left) === normalizeComparablePath(right),
+  );
 }
 
-function mergeByStatement(existing: MemoryRecord[], incoming: MemoryRecord[]): MemoryRecord[] {
+function mergeByStatement(
+  existing: MemoryRecord[],
+  incoming: MemoryRecord[],
+): MemoryRecord[] {
   const merged = new Map<string, MemoryRecord>();
   for (const record of existing) {
     merged.set(record.statement.trim().toLowerCase(), record);
@@ -176,7 +189,10 @@ export class CopilotMemoryBackend implements MemoryBackend {
 
   constructor(workspaceDir: string, targetPath?: string) {
     const resolvedPath = targetPath ?? defaultCopilotMemoryTarget(workspaceDir);
-    const discoveredWorkspacePath = discoverCopilotWorkspaceMemoryRoot(workspaceDir, false);
+    const discoveredWorkspacePath = discoverCopilotWorkspaceMemoryRoot(
+      workspaceDir,
+      false,
+    );
     const discoveredGlobalPath = discoverCopilotGlobalMemoryRoot(false);
     if (resolvedPath.endsWith(".json")) {
       this.target = { kind: "legacy-json-file", path: resolvedPath };
@@ -277,7 +293,9 @@ export class CopilotMemoryBackend implements MemoryBackend {
         try {
           const raw = await readFile(fullPath, "utf8");
           const inferredScope = scopeFromPath(fullPath);
-          const inferredCategory = normalizeCategoryValue(inferCategoryFromPath(fullPath));
+          const inferredCategory = normalizeCategoryValue(
+            inferCategoryFromPath(fullPath),
+          );
           const fromMachineBlock = parseMachineBlock(raw);
           if (fromMachineBlock.length > 0) {
             loaded.push(
@@ -292,7 +310,11 @@ export class CopilotMemoryBackend implements MemoryBackend {
             );
             continue;
           }
-          const parsed = parseBulletStatements(raw, inferredScope, "copilot-memory-markdown").map((record) => ({
+          const parsed = parseBulletStatements(
+            raw,
+            inferredScope,
+            "copilot-memory-markdown",
+          ).map((record) => ({
             ...record,
             context: {
               ...record.context,
@@ -365,7 +387,11 @@ export class CopilotMemoryBackend implements MemoryBackend {
             },
           }));
         } else {
-          existing = parseBulletStatements(raw, scope, "copilot-memory-markdown").map((record) => ({
+          existing = parseBulletStatements(
+            raw,
+            scope,
+            "copilot-memory-markdown",
+          ).map((record) => ({
             ...record,
             context: {
               ...record.context,
