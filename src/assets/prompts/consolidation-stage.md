@@ -5,8 +5,8 @@ Workspace context (project name, AGENTS.md): {{orientation_path}}
 New insights extracted this run:
 {{insights}}
 
-Use specialist agents to gather the information needed to integrate these into the memory store:
-0. Your first evidence step must be specialist review, either via orchestrator-run specialist passes or native delegation with the `task` tool.
+Use specialist agents to gather the information needed to integrate these into the memory store: 0. Your first evidence step must be specialist review, either via orchestrator-run specialist passes or native delegation with the `task` tool.
+
 1. Delegate to specialist agents to call list_memories and summarize what already exists
 2. Have specialist agents review the full memory store, not just new insights. They should perform a hygiene pass across every existing memory:
    - validate stale or suspicious memories against their references with read_reference
@@ -16,33 +16,39 @@ Use specialist agents to gather the information needed to integrate these into t
    - remove memories that are unsupported, contradicted, obsolete, or too narrow to be useful
 3. Review the specialist summaries yourself. **Before writing any memory**, compare it against: (a) all existing memories reported by specialists, and (b) any memory you've already written this run. If the same fact, entity, URL, file, or convention appears in more than one place, merge them into a single entry — do NOT write duplicates.
 4. For each new insight and each existing memory, decide and apply final changes yourself:
-   - write_memory if it's new or reinforces existing knowledge
+   - use `write_workspace_memory` during the main consolidation pass
+   - use `write_global_memory` only during the post-consolidation global pass
    - Skip if already covered adequately (including by a memory you just wrote)
-   - remove_memory(id) + write_memory for contradicted/outdated memories
-   - remove_memory(id) + write_memory for memories that need generalization or stricter local metadata
+   - remove_memory(id) + matching scoped write tool for contradicted/outdated memories
+   - remove_memory(id) + matching scoped write tool for memories that need generalization or stricter local metadata
 
 If specialist agents are available, delegate:
+
 - existing-memory inventory, deduplication, and broad/narrow cleanup to `memory-inventory-reviewer`
 - contradiction/scope classification to `contradiction-scope-reviewer`
 - source/reference validation for risky changes to `reference-validator`
+- globally generalizable user-scope extraction to `global-rule-extractor` after the initial consolidation writes are applied
 
-Use only these `agent_type` values: `explore`, `memory-inventory-reviewer`, `contradiction-scope-reviewer`, `reference-validator`.
+Use only these `agent_type` values: `explore`, `memory-inventory-reviewer`, `contradiction-scope-reviewer`, `reference-validator`, `global-rule-extractor`.
 Do not infer that specialists are unavailable just because `list_agents` reports no background agents. Custom specialist agents are invoked through the `task` tool for this stage.
 
-Only the main consolidation agent should call `write_memory`, `remove_memory`, and `finalize_consolidation`. Specialist agents must inspect sources and return summaries/recommendations for the main agent to apply. The main consolidation agent should not call file, shell, list, or reference-inspection tools directly; delegate another specialist pass if more evidence is needed.
+Only the main consolidation agent should call `write_workspace_memory` / `write_global_memory`, `remove_memory`, and `finalize_consolidation`. Specialist agents must inspect sources and return summaries/recommendations for the main agent to apply. The main consolidation agent should not call file, shell, list, or reference-inspection tools directly; delegate another specialist pass if more evidence is needed.
 Do not use a specialist as a memory writer. Specialists return action plans; the main consolidation agent applies final changes.
 Use Copilot's native custom subagent delegation. Delegate one specialist task at a time, wait for that subagent's result, then decide whether another specialist is needed. If a read/wait tool is available for delegated agents, use only the real agent ID returned by the delegation tool; never invent placeholder agent IDs.
 
-Required fields for every `write_memory` call:
+Required fields for every scoped write call:
+
 - `reason`: why this qualifies as durable memory
 - `horizon`: `short_term` or `long_term`
 - `references`: at least one concrete reference object (`file`, `url`, `session`, or `doc`)
 - If `horizon=short_term`, include `expires_at`
 
 Strongly recommended fields:
+
 - `category`, `tags`, `rationale`, `applies_when`, `evidence`
 
 Consolidation rules:
+
 - Scope: use "user" for personal preferences/habits, "workspace" for project-specific facts
 - Confidence: 0.9 for clear explicit corrections, 0.85 for observed patterns, 0.75 for inferred preferences
 - Source validation: require specialist summaries from read_reference before pruning, contradicting, or materially rewriting a memory with references. If references are missing or unreadable, lower confidence or add precise run/session references rather than inventing certainty.

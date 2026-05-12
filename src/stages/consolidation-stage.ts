@@ -1,30 +1,165 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { IntelligenceProvider, PipelineStage } from "../core/contracts.js";
-import { resolveAssetPath, workspaceStorageDir } from "../dream/dreamer-home.js";
 import type { DreamContext, InsightRecord } from "../core/types.js";
+import {
+  resolveAssetPath,
+  workspaceStorageDir,
+} from "../dream/dreamer-home.js";
 import type { RuntimeStageAgentPackConfig } from "../dream/runtime-manifest.js";
 import {
   buildConsolidationCustomAgents,
   requestConsolidationFinalVerdict,
-  runConsolidationAgentPasses
+  runConsolidationAgentPasses,
 } from "./consolidation-agent-pack.js";
 import { createConsolidationTools } from "./consolidation-stage-tools.js";
 
+const GLOBAL_EXTRACTOR_NAME = "global-rule-extractor";
+
+function splitGlobalExtractor<T extends { name: string }>(
+  agents: T[] | undefined,
+): { prePass: T[] | undefined; globalExtractor: T | undefined } {
+  if (!agents?.length)
+    return { prePass: undefined, globalExtractor: undefined };
+  const globalExtractor = agents.find(
+    (agent) => agent.name === GLOBAL_EXTRACTOR_NAME,
+  );
+  const prePass = agents.filter(
+    (agent) => agent.name !== GLOBAL_EXTRACTOR_NAME,
+  );
+  return { prePass, globalExtractor };
+}
+
+function formatGlobalCandidateMemories(context: DreamContext): string {
+  const workspaceCandidates = context.memories
+    .filter((memory) => memory.scope === "workspace")
+    .map((memory, index) => `${index + 1}. ${memory.statement}`)
+    .slice(0, 200)
+    .join("\n");
+  return workspaceCandidates || "(none)";
+}
+
+async function runGlobalConsolidationPass(
+  context: DreamContext,
+  provider: IntelligenceProvider,
+  agentPack: RuntimeStageAgentPackConfig | undefined,
+  globalExtractor: { name: string } | undefined,
+  runDir: string,
+  orientationPath: string,
+): Promise<void> {
+  if (!globalExtractor) return;
+
+  const { tools, applyChanges, hasFinalVerdict, getFinalVerdict } =
+    createConsolidationTools(
+      context.memories,
+      context.nowIso,
+      context.insights,
+      context.events,
+      context.runId,
+      context.workspaceDir,
+      runDir,
+      "global",
+    );
+
+  const specialistPrompt = [
+    "Post-consolidation global extraction pass.",
+    "Review current memories and identify only globally generalizable user-scope rules.",
+    "Do not call write_global_memory/remove_memory/finalize_consolidation in this specialist pass.",
+    "Use list_memories and read_reference as needed and return only compact recommendations.",
+    "Workspace-scope memories available for generalization:",
+    formatGlobalCandidateMemories(context),
+  ].join("\n\n");
+
+  const specialistOutput = await provider.runAgent(specialistPrompt, tools, {
+    streamTag: "consolidation global specialist",
+    selectedAgent: GLOBAL_EXTRACTOR_NAME,
+    customAgents: [globalExtractor],
+    defaultAgent: agentPack?.defaultAgent,
+    retries: [],
+  });
+
+  const mainPrompt = [
+    "Apply global consolidation from specialist recommendations.",
+    "Only write globally valid user-scope memories; do not create workspace-scoped memories in this pass.",
+    "If a workspace memory is globally valid, keep the workspace fact and add/merge a separate user-scope global rule.",
+    "Remove or narrow global memories that are actually workspace-local.",
+    "Call finalize_consolidation when done.",
+    "Specialist findings:",
+    specialistOutput || "(no findings)",
+  ].join("\n\n");
+
+  try {
+    await provider.runAgent(mainPrompt, tools, {
+      streamTag: "consolidation global main",
+      retries: [
+        "Complete the post-consolidation global pass. Apply needed write_global_memory/remove_memory changes and call finalize_consolidation.",
+      ],
+      shouldRetry: async () => !hasFinalVerdict(),
+      customAgents: [globalExtractor],
+      defaultAgent: agentPack?.defaultAgent,
+    });
+  } catch (error) {
+    context.diary.push(
+      `consolidation:global_pass_error=${String(error).slice(0, 120)}`,
+    );
+  }
+
+  if (!hasFinalVerdict()) {
+    try {
+      await requestConsolidationFinalVerdict(provider, tools, agentPack, [
+        globalExtractor,
+      ]);
+    } catch (error) {
+      context.diary.push(
+        `consolidation:global_pass_error=${String(error).slice(0, 120)}`,
+      );
+    }
+  }
+
+  if (!hasFinalVerdict()) {
+    context.diary.push("consolidation:global_missing_final_verdict=1");
+    throw new Error(
+      "consolidation global pass missing required finalize_consolidation",
+    );
+  }
+
+  const finalVerdict = getFinalVerdict();
+  if (finalVerdict) {
+    context.diary.push(
+      `consolidation:global_final_status=${finalVerdict.status}`,
+    );
+  }
+
+  applyChanges(context);
+}
+
 function formatInsights(insights: InsightRecord[]): string {
-  if (!insights.length) return "(none - only review and prune existing memories)";
+  if (!insights.length)
+    return "(none - only review and prune existing memories)";
   return insights
     .map((insight, index) => {
-      const parts = [`${index + 1}. statement: ${insight.statement}`, `   scope: ${insight.scope}`];
-      if (insight.context?.category) parts.push(`   category: ${insight.context.category}`);
-      if (insight.context?.tags?.length) parts.push(`   tags: ${insight.context.tags.join(", ")}`);
-      if (insight.context?.rationale) parts.push(`   rationale: ${insight.context.rationale}`);
-      if (insight.context?.appliesWhen) parts.push(`   applies_when: ${insight.context.appliesWhen}`);
-      if (insight.capture?.horizon) parts.push(`   horizon: ${insight.capture.horizon}`);
-      if (insight.capture?.expiresAt) parts.push(`   expires_at: ${insight.capture.expiresAt}`);
-      if (insight.capture?.reason) parts.push(`   reason: ${insight.capture.reason}`);
+      const parts = [
+        `${index + 1}. statement: ${insight.statement}`,
+        `   scope: ${insight.scope}`,
+      ];
+      if (insight.context?.category)
+        parts.push(`   category: ${insight.context.category}`);
+      if (insight.context?.tags?.length)
+        parts.push(`   tags: ${insight.context.tags.join(", ")}`);
+      if (insight.context?.rationale)
+        parts.push(`   rationale: ${insight.context.rationale}`);
+      if (insight.context?.appliesWhen)
+        parts.push(`   applies_when: ${insight.context.appliesWhen}`);
+      if (insight.capture?.horizon)
+        parts.push(`   horizon: ${insight.capture.horizon}`);
+      if (insight.capture?.expiresAt)
+        parts.push(`   expires_at: ${insight.capture.expiresAt}`);
+      if (insight.capture?.reason)
+        parts.push(`   reason: ${insight.capture.reason}`);
       if (insight.capture?.references?.length) {
-        const references = insight.capture.references.map((ref) => `${ref.kind}:${ref.value}`).join("; ");
+        const references = insight.capture.references
+          .map((ref) => `${ref.kind}:${ref.value}`)
+          .join("; ");
         parts.push(`   references: ${references}`);
       }
       if (insight.evidence?.length) {
@@ -44,15 +179,23 @@ function formatInsights(insights: InsightRecord[]): string {
     .join("\n");
 }
 
-async function loadPrompt(insights: InsightRecord[], orientationPath: string): Promise<string> {
+async function loadPrompt(
+  insights: InsightRecord[],
+  orientationPath: string,
+): Promise<string> {
   const insightList = insights.length
     ? formatInsights(insights)
     : "(none - only review and prune existing memories)";
   try {
-    const template = await readFile(resolveAssetPath("prompts/consolidation-stage.md"), "utf8");
-    return template.replace("{{insights}}", insightList).replace("{{orientation_path}}", orientationPath);
+    const template = await readFile(
+      resolveAssetPath("prompts/consolidation-stage.md"),
+      "utf8",
+    );
+    return template
+      .replace("{{insights}}", insightList)
+      .replace("{{orientation_path}}", orientationPath);
   } catch {
-    return `Consolidate these insights into long-term memory.\n\nNew insights:\n${insightList}\n\nDelegate memory listing/reference inspection to specialist agents, then call write_memory/remove_memory and finalize_consolidation yourself.`;
+    return `Consolidate these insights into long-term memory.\n\nNew insights:\n${insightList}\n\nDelegate memory listing/reference inspection to specialist agents, then call write_workspace_memory/remove_memory and finalize_consolidation yourself.`;
   }
 }
 
@@ -61,35 +204,50 @@ export class ConsolidationStage implements PipelineStage {
 
   constructor(
     private readonly provider: IntelligenceProvider,
-    private readonly agentPack?: RuntimeStageAgentPackConfig
+    private readonly agentPack?: RuntimeStageAgentPackConfig,
   ) {}
 
   async run(context: DreamContext): Promise<DreamContext> {
     // Remove autogenerated noise from previous runs
     const priorCount = context.memories.length;
-    context.memories = context.memories.filter((m) => !m.statement.startsWith("Observed "));
-    const removedNoise = priorCount - context.memories.length;
-    if (removedNoise > 0) context.diary.push(`consolidation:removed-noise-memories=${removedNoise}`);
-
-    if (context.insights.length === 0 && context.memories.length === 0) return context;
-
-    const runDir = join(workspaceStorageDir(context.workspaceDir), "runs", context.runId);
-    const orientationPath = join(runDir, "orientation.md");
-    const { tools, applyChanges, hasFinalVerdict, getFinalVerdict } = createConsolidationTools(
-      context.memories,
-      context.nowIso,
-      context.insights,
-      context.runId,
-      context.workspaceDir,
-      runDir
+    context.memories = context.memories.filter(
+      (m) => !m.statement.startsWith("Observed "),
     );
+    const removedNoise = priorCount - context.memories.length;
+    if (removedNoise > 0)
+      context.diary.push(
+        `consolidation:removed-noise-memories=${removedNoise}`,
+      );
+
+    if (context.insights.length === 0 && context.memories.length === 0)
+      return context;
+
+    const runDir = join(
+      workspaceStorageDir(context.workspaceDir),
+      "runs",
+      context.runId,
+    );
+    const orientationPath = join(runDir, "orientation.md");
+    const { tools, applyChanges, hasFinalVerdict, getFinalVerdict } =
+      createConsolidationTools(
+        context.memories,
+        context.nowIso,
+        context.insights,
+        context.events,
+        context.runId,
+        context.workspaceDir,
+        runDir,
+        "workspace",
+      );
     const prompt = await loadPrompt(context.insights, orientationPath);
     const customAgents = await buildConsolidationCustomAgents(
       this.agentPack,
       context.workspaceDir,
       runDir,
-      orientationPath
+      orientationPath,
     );
+    const { prePass: prePassAgents, globalExtractor } =
+      splitGlobalExtractor(customAgents);
 
     try {
       await runConsolidationAgentPasses(
@@ -97,25 +255,38 @@ export class ConsolidationStage implements PipelineStage {
         prompt,
         tools,
         this.agentPack,
-        customAgents,
-        () => !hasFinalVerdict()
+        prePassAgents,
+        () => !hasFinalVerdict(),
       );
     } catch (error) {
-      context.diary.push(`consolidation:agent_error=${String(error).slice(0, 120)}`);
+      context.diary.push(
+        `consolidation:agent_error=${String(error).slice(0, 120)}`,
+      );
     }
 
     if (!hasFinalVerdict()) {
       try {
-        await requestConsolidationFinalVerdict(this.provider, tools, this.agentPack, customAgents);
+        await requestConsolidationFinalVerdict(
+          this.provider,
+          tools,
+          this.agentPack,
+          prePassAgents,
+        );
       } catch (error) {
-        context.diary.push(`consolidation:agent_error=${String(error).slice(0, 120)}`);
+        context.diary.push(
+          `consolidation:agent_error=${String(error).slice(0, 120)}`,
+        );
       }
     }
 
     if (!hasFinalVerdict()) {
       context.diary.push("consolidation:missing_final_verdict=1");
-      context.diary.push("consolidation:user_message=Consolidation must call finalize_consolidation to finish.");
-      throw new Error("consolidation stage missing required finalize_consolidation");
+      context.diary.push(
+        "consolidation:user_message=Consolidation must call finalize_consolidation to finish.",
+      );
+      throw new Error(
+        "consolidation stage missing required finalize_consolidation",
+      );
     }
 
     const finalVerdict = getFinalVerdict();
@@ -124,7 +295,19 @@ export class ConsolidationStage implements PipelineStage {
     }
 
     applyChanges(context);
-    context.diary.push(`consolidation:memories_added=${context.metrics.memoriesAdded}`);
+    context.diary.push(
+      `consolidation:memories_added=${context.metrics.memoriesAdded}`,
+    );
+
+    await runGlobalConsolidationPass(
+      context,
+      this.provider,
+      this.agentPack,
+      globalExtractor,
+      runDir,
+      orientationPath,
+    );
+
     return context;
   }
 }

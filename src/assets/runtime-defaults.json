@@ -11,9 +11,7 @@
       "sessionGitHubTokenEnvVar": "COPILOT_SDK_SESSION_GITHUB_TOKEN",
       "cliPathEnvVar": "COPILOT_SDK_CLI_PATH",
       "cliUrlEnvVar": "COPILOT_SDK_CLI_URL",
-      "clientExtraEnvVars": [
-        "GITHUB_HOST"
-      ],
+      "clientExtraEnvVars": ["GITHUB_HOST"],
       "byok": {
         "type": "openai",
         "wireApi": "completions",
@@ -207,6 +205,20 @@
               "read_reference"
             ],
             "promptTemplatePath": "prompts/stages/consolidation/agents/reference-validator.md",
+            "infer": true
+          },
+          {
+            "name": "global-rule-extractor",
+            "displayName": "Global Rule Extractor",
+            "description": "Finds only broadly generalizable user-scope rules and filters out workspace-local patterns.",
+            "tools": [
+              "bash",
+              "read_bash",
+              "view",
+              "list_memories",
+              "read_reference"
+            ],
+            "promptTemplatePath": "prompts/stages/consolidation/agents/global-rule-extractor.md",
             "infer": true
           }
         ],

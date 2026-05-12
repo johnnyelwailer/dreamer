@@ -2,16 +2,19 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ConsolidationStage } from "../../src/stages/consolidation-stage.js";
+import type {
+  IntelligenceProvider,
+  RunAgentOptions,
+} from "../../src/core/contracts.js";
 import { buildContext } from "../../src/dream/build-context.js";
-import { createConsolidationTools } from "../../src/stages/consolidation-stage-tools.js";
-import type { IntelligenceProvider, RunAgentOptions } from "../../src/core/contracts.js";
 import type { RuntimeStageAgentPackConfig } from "../../src/dream/runtime-manifest.js";
+import { createConsolidationTools } from "../../src/stages/consolidation-stage-tools.js";
+import { ConsolidationStage } from "../../src/stages/consolidation-stage.js";
 
 const stubProvider = {
   id: "provider.stub",
   summarize: async () => "",
-  runAgent: async () => ""
+  runAgent: async () => "",
 };
 
 const MAIN_CONSOLIDATION_EXCLUDED_TOOLS = [
@@ -28,7 +31,7 @@ const MAIN_CONSOLIDATION_EXCLUDED_TOOLS = [
   "run_in_terminal",
   "send_to_terminal",
   "get_terminal_output",
-  "terminal_last_command"
+  "terminal_last_command",
 ];
 
 describe("ConsolidationStage", () => {
@@ -37,42 +40,56 @@ describe("ConsolidationStage", () => {
     const provider = {
       ...stubProvider,
       runAgent: async (_prompt: string, tools: unknown[]) => {
-        const typedTools = tools as Array<{ name: string; handler: (args: Record<string, unknown>) => unknown }>;
-        const writeTool = typedTools.find((t) => t.name === "write_memory");
+        const typedTools = tools as Array<{
+          name: string;
+          handler: (args: Record<string, unknown>) => unknown;
+        }>;
+        const writeTool = typedTools.find(
+          (t) => t.name === "write_workspace_memory",
+        );
         const listTool = typedTools.find((t) => t.name === "list_memories");
-        const finalizeTool = typedTools.find((t) => t.name === "finalize_consolidation");
+        const finalizeTool = typedTools.find(
+          (t) => t.name === "finalize_consolidation",
+        );
         listTool?.handler({});
         writeTool?.handler({
           statement: "Use fast failing tests before refactors",
-          scope: "workspace",
           confidence: 0.9,
           horizon: "long_term",
-          reason: "Repeated user correction showed this is a durable engineering practice.",
-          references: [{ kind: "file", value: "docs/prd.md" }]
+          reason:
+            "Repeated user correction showed this is a durable engineering practice.",
+          references: [{ kind: "file", value: "docs/prd.md" }],
         });
         writeTool?.handler({
           statement: "Use fast failing tests before refactors",
-          scope: "workspace",
           confidence: 0.9,
           horizon: "long_term",
-          reason: "Repeated user correction showed this is a durable engineering practice.",
-          references: [{ kind: "file", value: "docs/prd.md" }]
+          reason:
+            "Repeated user correction showed this is a durable engineering practice.",
+          references: [{ kind: "file", value: "docs/prd.md" }],
         });
         finalizeTool?.handler({
           status: "completed",
-          summary: "Recorded durable testing preference and merged duplicates."
+          summary: "Recorded durable testing preference and merged duplicates.",
         });
         writeCount++;
         return "";
-      }
+      },
     };
     const stage = new ConsolidationStage(provider);
     const context = buildContext(process.cwd(), "run-x");
-    context.insights = [{ statement: "Use fast failing tests before refactors", scope: "workspace" }];
+    context.insights = [
+      {
+        statement: "Use fast failing tests before refactors",
+        scope: "workspace",
+      },
+    ];
     const result = await stage.run(context);
     expect(writeCount).toBe(1);
     expect(result.memories.length).toBe(1);
-    expect(result.memories[0]?.statement).toBe("Use fast failing tests before refactors");
+    expect(result.memories[0]?.statement).toBe(
+      "Use fast failing tests before refactors",
+    );
     // Writing same statement again bumps confidence, not adds duplicate
     expect(result.memories[0]?.confidence).toBeGreaterThan(0.9);
   });
@@ -81,11 +98,18 @@ describe("ConsolidationStage", () => {
     const provider = {
       ...stubProvider,
       runAgent: async (_prompt: string, tools: unknown[]) => {
-        const finalizeTool = (tools as Array<{ name: string; handler: (args: Record<string, unknown>) => unknown }>)
-          .find((tool) => tool.name === "finalize_consolidation");
-        finalizeTool?.handler({ status: "no_changes_needed", summary: "Reviewed memories without changes." });
+        const finalizeTool = (
+          tools as Array<{
+            name: string;
+            handler: (args: Record<string, unknown>) => unknown;
+          }>
+        ).find((tool) => tool.name === "finalize_consolidation");
+        finalizeTool?.handler({
+          status: "no_changes_needed",
+          summary: "Reviewed memories without changes.",
+        });
         return "";
-      }
+      },
     };
     const stage = new ConsolidationStage(provider);
     const context = buildContext(process.cwd(), "run-y");
@@ -94,18 +118,26 @@ describe("ConsolidationStage", () => {
       scope: "workspace",
       statement: "Observed message_events=24",
       confidence: 0.7,
-      provenance: { source: "dream-run", eventIds: [], capturedAt: context.nowIso }
+      provenance: {
+        source: "dream-run",
+        eventIds: [],
+        capturedAt: context.nowIso,
+      },
     });
     context.memories.push({
       id: "mem-keep",
       scope: "workspace",
       statement: "Use explicit rollback plans for risky migrations",
       confidence: 0.9,
-      provenance: { source: "dream-run-intelligence", eventIds: [], capturedAt: context.nowIso }
+      provenance: {
+        source: "dream-run-intelligence",
+        eventIds: [],
+        capturedAt: context.nowIso,
+      },
     });
     const result = await stage.run(context);
     expect(result.memories.map((m) => m.statement)).toEqual([
-      "Use explicit rollback plans for risky migrations"
+      "Use explicit rollback plans for risky migrations",
     ]);
   });
 
@@ -113,21 +145,62 @@ describe("ConsolidationStage", () => {
     const workspaceDir = join(tmpdir(), `dreamer-consolidation-${Date.now()}`);
     const runDir = join(workspaceDir, ".dreamer-run");
     await mkdir(join(runDir, "sessions"), { recursive: true });
-    await writeFile(join(workspaceDir, "AGENTS.md"), "Use pnpm for this repo.\n", "utf8");
-    await writeFile(join(runDir, "sessions", "session-1.md"), "[1] **user**\nPrefer pnpm.\n", "utf8");
+    await writeFile(
+      join(workspaceDir, "AGENTS.md"),
+      "Use pnpm for this repo.\n",
+      "utf8",
+    );
+    await writeFile(
+      join(runDir, "sessions", "session-1.md"),
+      "[1] **user**\nPrefer pnpm.\n",
+      "utf8",
+    );
 
     try {
-      const { tools } = createConsolidationTools([], "2026-05-10T00:00:00.000Z", [], "run-test", workspaceDir, runDir);
-      const readReference = tools.find((tool) => tool.name === "read_reference") as
-        | { handler: (args: Record<string, unknown>) => Promise<{ textResultForLlm: string; resultType: string }> }
+      const { tools } = createConsolidationTools(
+        [],
+        "2026-05-10T00:00:00.000Z",
+        [],
+        [],
+        "run-test",
+        workspaceDir,
+        runDir,
+        "workspace",
+      );
+      const readReference = tools.find(
+        (tool) => tool.name === "read_reference",
+      ) as
+        | {
+            handler: (
+              args: Record<string, unknown>,
+            ) => Promise<{ textResultForLlm: string; resultType: string }>;
+          }
         | undefined;
 
-      const fileResult = await readReference?.handler({ kind: "file", value: "AGENTS.md" });
-      const sessionResult = await readReference?.handler({ kind: "session", value: "session-1" });
-      const runScopedSessionResult = await readReference?.handler({ kind: "session", value: "run-test/session-1.md" });
-      const idSessionResult = await readReference?.handler({ kind: "session", value: "unknown-1234-abcd" });
-      const runResult = await readReference?.handler({ kind: "doc", value: "dream-run:run-test" });
-      const blocked = await readReference?.handler({ kind: "file", value: "/etc/passwd" });
+      const fileResult = await readReference?.handler({
+        kind: "file",
+        value: "AGENTS.md",
+      });
+      const sessionResult = await readReference?.handler({
+        kind: "session",
+        value: "session-1",
+      });
+      const runScopedSessionResult = await readReference?.handler({
+        kind: "session",
+        value: "run-test/session-1.md",
+      });
+      const idSessionResult = await readReference?.handler({
+        kind: "session",
+        value: "unknown-1234-abcd",
+      });
+      const runResult = await readReference?.handler({
+        kind: "doc",
+        value: "dream-run:run-test",
+      });
+      const blocked = await readReference?.handler({
+        kind: "file",
+        value: "/etc/passwd",
+      });
 
       expect(fileResult?.textResultForLlm).toContain("Use pnpm");
       expect(sessionResult?.textResultForLlm).toContain("Prefer pnpm");
@@ -140,67 +213,138 @@ describe("ConsolidationStage", () => {
     }
   });
 
-  it("rejects write_memory references that do not exist", async () => {
-    const workspaceDir = join(tmpdir(), `dreamer-consolidation-write-${Date.now()}`);
+  it("rejects workspace write references that do not exist", async () => {
+    const workspaceDir = join(
+      tmpdir(),
+      `dreamer-consolidation-write-${Date.now()}`,
+    );
     const runDir = join(workspaceDir, ".dreamer-run");
     await mkdir(join(runDir, "sessions"), { recursive: true });
-    await writeFile(join(workspaceDir, "AGENTS.md"), "Use pnpm for this repo.\n", "utf8");
-    await writeFile(join(runDir, "sessions", "session-1.md"), "[1] **user**\nPrefer pnpm.\n", "utf8");
+    await writeFile(
+      join(workspaceDir, "AGENTS.md"),
+      "Use pnpm for this repo.\n",
+      "utf8",
+    );
+    await writeFile(
+      join(runDir, "sessions", "session-1.md"),
+      "[1] **user**\nPrefer pnpm.\n",
+      "utf8",
+    );
 
     try {
-      const { tools } = createConsolidationTools([], "2026-05-10T00:00:00.000Z", [], "run-test", workspaceDir, runDir);
-      const writeMemory = tools.find((tool) => tool.name === "write_memory") as
-        | { handler: (args: Record<string, unknown>) => { textResultForLlm: string; resultType: string } }
+      const { tools } = createConsolidationTools(
+        [],
+        "2026-05-10T00:00:00.000Z",
+        [],
+        [],
+        "run-test",
+        workspaceDir,
+        runDir,
+        "workspace",
+      );
+      const writeMemory = tools.find(
+        (tool) => tool.name === "write_workspace_memory",
+      ) as
+        | {
+            handler: (args: Record<string, unknown>) => {
+              textResultForLlm: string;
+              resultType: string;
+            };
+          }
         | undefined;
 
       const missingRef = writeMemory?.handler({
         statement: "Use explicit rollback plans for risky migrations",
-        scope: "workspace",
         horizon: "long_term",
         reason: "This is a validated durable engineering preference.",
-        references: [{ kind: "file", value: "DOES_NOT_EXIST.md" }]
+        references: [{ kind: "file", value: "DOES_NOT_EXIST.md" }],
       });
       const existingRef = writeMemory?.handler({
         statement: "Prefer pnpm for this repository",
-        scope: "workspace",
         horizon: "long_term",
         reason: "This preference is explicit and stable across sessions.",
-        references: [{ kind: "session", value: "1" }]
+        references: [{ kind: "session", value: "1" }],
       });
 
       expect(missingRef?.resultType).toBe("error");
-      expect(missingRef?.textResultForLlm).toContain("Reference target not found");
+      expect(missingRef?.textResultForLlm).toContain(
+        "Reference target not found",
+      );
       expect(existingRef?.resultType).toBe("success");
     } finally {
       await rm(workspaceDir, { recursive: true, force: true });
     }
   });
 
-  it("accepts write_memory session references using run-scoped paths and session ids", async () => {
-    const workspaceDir = join(tmpdir(), `dreamer-consolidation-write-session-ref-${Date.now()}`);
+  it("accepts scoped write tools with session references", async () => {
+    const workspaceDir = join(
+      tmpdir(),
+      `dreamer-consolidation-write-session-ref-${Date.now()}`,
+    );
     const runDir = join(workspaceDir, ".dreamer-run");
     await mkdir(join(runDir, "sessions"), { recursive: true });
-    await writeFile(join(runDir, "sessions", "session-1.md"), "# Session 1\nSource: copilot-debug | ID: 0084540e\n\n[1] **user**\nPrefer pnpm.\n", "utf8");
+    await writeFile(
+      join(runDir, "sessions", "session-1.md"),
+      "# Session 1\nSource: copilot-debug | ID: 0084540e\n\n[1] **user**\nPrefer pnpm.\n",
+      "utf8",
+    );
 
     try {
-      const { tools } = createConsolidationTools([], "2026-05-10T00:00:00.000Z", [], "run-test", workspaceDir, runDir);
-      const writeMemory = tools.find((tool) => tool.name === "write_memory") as
-        | { handler: (args: Record<string, unknown>) => { textResultForLlm: string; resultType: string } }
+      const { tools } = createConsolidationTools(
+        [],
+        "2026-05-10T00:00:00.000Z",
+        [],
+        [],
+        "run-test",
+        workspaceDir,
+        runDir,
+        "workspace",
+      );
+      const writeMemory = tools.find(
+        (tool) => tool.name === "write_workspace_memory",
+      ) as
+        | {
+            handler: (args: Record<string, unknown>) => {
+              textResultForLlm: string;
+              resultType: string;
+            };
+          }
         | undefined;
 
       const runScopedRef = writeMemory?.handler({
         statement: "Prefer pnpm for this repository",
-        scope: "workspace",
         horizon: "long_term",
         reason: "This preference is explicit and stable across sessions.",
-        references: [{ kind: "session", value: "run-test/session-1.md" }]
+        references: [{ kind: "session", value: "run-test/session-1.md" }],
       });
-      const idRef = writeMemory?.handler({
+      const { tools: globalTools } = createConsolidationTools(
+        [],
+        "2026-05-10T00:00:00.000Z",
+        [],
+        [],
+        "run-test",
+        workspaceDir,
+        runDir,
+        "global",
+      );
+      const writeGlobalMemory = globalTools.find(
+        (tool) => tool.name === "write_global_memory",
+      ) as
+        | {
+            handler: (args: Record<string, unknown>) => {
+              textResultForLlm: string;
+              resultType: string;
+            };
+          }
+        | undefined;
+
+      const idRef = writeGlobalMemory?.handler({
         statement: "Keep concise status updates during execution",
-        scope: "user",
         horizon: "long_term",
         reason: "The user repeatedly prefers concise progress updates.",
-        references: [{ kind: "session", value: "0084540e-e033-453e-8df3-f0bc5ecc0451" }]
+        references: [
+          { kind: "session", value: "0084540e-e033-453e-8df3-f0bc5ecc0451" },
+        ],
       });
 
       expect(runScopedRef?.resultType).toBe("success");
@@ -211,44 +355,98 @@ describe("ConsolidationStage", () => {
   });
 
   it("passes consolidation specialist agents to the provider", async () => {
-    const calls: Array<{ prompt: string; options: RunAgentOptions; toolNames: string[] }> = [];
+    const calls: Array<{
+      prompt: string;
+      options: RunAgentOptions;
+      toolNames: string[];
+    }> = [];
     const provider: IntelligenceProvider = {
       id: "provider.test",
       summarize: async () => "",
-      runAgent: async (prompt: string, tools: unknown[], options: RunAgentOptions = {}) => {
+      runAgent: async (
+        prompt: string,
+        tools: unknown[],
+        options: RunAgentOptions = {},
+      ) => {
         calls.push({
           prompt,
           options,
-          toolNames: tools.map((tool) => String((tool as { name?: unknown }).name ?? "unknown"))
+          toolNames: tools.map((tool) =>
+            String((tool as { name?: unknown }).name ?? "unknown"),
+          ),
         });
-        const typedTools = tools as Array<{ name: string; handler: (args: Record<string, unknown>) => unknown }>;
-        const finalizeTool = typedTools.find((tool) => tool.name === "finalize_consolidation");
-        finalizeTool?.handler({ status: "no_changes_needed", summary: "No durable changes required after review." });
+        if (!options.selectedAgent) {
+          const typedTools = tools as Array<{
+            name: string;
+            handler: (args: Record<string, unknown>) => unknown;
+          }>;
+          const finalizeTool = typedTools.find(
+            (tool) => tool.name === "finalize_consolidation",
+          );
+          finalizeTool?.handler({
+            status: "no_changes_needed",
+            summary: "No durable changes required after review.",
+          });
+        }
         return "";
-      }
+      },
     };
     const pack: RuntimeStageAgentPackConfig = {
       defaultAgent: { excludedTools: MAIN_CONSOLIDATION_EXCLUDED_TOOLS },
       customAgents: [
         {
           name: "memory-inventory-reviewer",
-          tools: ["bash", "read_bash", "view", "list_memories", "read_reference"],
-          promptTemplatePath: "prompts/stages/consolidation/agents/memory-inventory-reviewer.md",
-          infer: false
+          tools: [
+            "bash",
+            "read_bash",
+            "view",
+            "list_memories",
+            "read_reference",
+          ],
+          promptTemplatePath:
+            "prompts/stages/consolidation/agents/memory-inventory-reviewer.md",
+          infer: false,
         },
         {
           name: "contradiction-scope-reviewer",
-          tools: ["bash", "read_bash", "view", "list_memories", "read_reference"],
-          promptTemplatePath: "prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
-          infer: false
+          tools: [
+            "bash",
+            "read_bash",
+            "view",
+            "list_memories",
+            "read_reference",
+          ],
+          promptTemplatePath:
+            "prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
+          infer: false,
         },
         {
           name: "reference-validator",
-          tools: ["bash", "read_bash", "view", "list_memories", "read_reference"],
-          promptTemplatePath: "prompts/stages/consolidation/agents/reference-validator.md",
-          infer: false
-        }
-      ]
+          tools: [
+            "bash",
+            "read_bash",
+            "view",
+            "list_memories",
+            "read_reference",
+          ],
+          promptTemplatePath:
+            "prompts/stages/consolidation/agents/reference-validator.md",
+          infer: false,
+        },
+        {
+          name: "global-rule-extractor",
+          tools: [
+            "bash",
+            "read_bash",
+            "view",
+            "list_memories",
+            "read_reference",
+          ],
+          promptTemplatePath:
+            "prompts/stages/consolidation/agents/global-rule-extractor.md",
+          infer: false,
+        },
+      ],
     };
     const stage = new ConsolidationStage(provider, pack);
     const context = buildContext(process.cwd(), "run-agents");
@@ -257,33 +455,60 @@ describe("ConsolidationStage", () => {
       scope: "user",
       statement: "Always commit and push after every change",
       confidence: 0.8,
-      provenance: { source: "test", eventIds: [], capturedAt: context.nowIso }
+      provenance: { source: "test", eventIds: [], capturedAt: context.nowIso },
     });
 
     await stage.run(context);
 
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(3);
     expect(calls[0]?.options.selectedAgent).toBeUndefined();
-    expect(calls[0]?.options.defaultAgent).toEqual({ excludedTools: MAIN_CONSOLIDATION_EXCLUDED_TOOLS });
+    expect(calls[1]?.options.selectedAgent).toBe("global-rule-extractor");
+    expect(calls[2]?.options.selectedAgent).toBeUndefined();
+    expect(calls[0]?.options.defaultAgent).toEqual({
+      excludedTools: MAIN_CONSOLIDATION_EXCLUDED_TOOLS,
+    });
     expect(calls[0]?.options.customAgents?.map((agent) => agent.name)).toEqual([
       "memory-inventory-reviewer",
       "contradiction-scope-reviewer",
-      "reference-validator"
+      "reference-validator",
     ]);
     expect(calls[0]?.toolNames).toEqual([
       "list_memories",
       "read_reference",
-      "write_memory",
+      "write_workspace_memory",
       "remove_memory",
-      "finalize_consolidation"
+      "finalize_consolidation",
     ]);
-    expect(calls[0]?.options.customAgents?.[0]?.prompt).toContain("memory inventory reviewer");
-    expect(calls[0]?.options.customAgents?.[1]?.prompt).toContain("conditional_compatibility");
-    expect(calls[0]?.options.customAgents?.[2]?.prompt).toContain("Do not call write_memory");
-    expect(calls[0]?.prompt).toContain("Your first evidence step must be specialist review, either via orchestrator-run specialist passes or native delegation with the `task` tool");
-    expect(calls[0]?.prompt).toContain("Use only these `agent_type` values: `explore`, `memory-inventory-reviewer`, `contradiction-scope-reviewer`, `reference-validator`");
-    expect(calls[0]?.prompt).toContain("Have specialist agents review the full memory store");
-    expect(calls[0]?.prompt).toContain("The main consolidation agent should not call file, shell, list, or reference-inspection tools directly");
+    expect(calls[0]?.options.customAgents?.[0]?.prompt).toContain(
+      "memory inventory reviewer",
+    );
+    expect(calls[0]?.options.customAgents?.[1]?.prompt).toContain(
+      "conditional_compatibility",
+    );
+    expect(calls[0]?.options.customAgents?.[2]?.prompt).toContain(
+      "Do not call write_workspace_memory",
+    );
+    expect(calls[1]?.options.customAgents?.[0]?.prompt).toContain(
+      "global rule extractor",
+    );
+    expect(calls[1]?.prompt).toContain(
+      "Post-consolidation global extraction pass",
+    );
+    expect(calls[2]?.prompt).toContain(
+      "Apply global consolidation from specialist recommendations",
+    );
+    expect(calls[0]?.prompt).toContain(
+      "Your first evidence step must be specialist review, either via orchestrator-run specialist passes or native delegation with the `task` tool",
+    );
+    expect(calls[0]?.prompt).toContain(
+      "Use only these `agent_type` values: `explore`, `memory-inventory-reviewer`, `contradiction-scope-reviewer`, `reference-validator`, `global-rule-extractor`",
+    );
+    expect(calls[0]?.prompt).toContain(
+      "Have specialist agents review the full memory store",
+    );
+    expect(calls[0]?.prompt).toContain(
+      "The main consolidation agent should not call file, shell, list, or reference-inspection tools directly",
+    );
   });
 
   it("runs configured explicit specialist sequence before the main consolidation agent", async () => {
@@ -291,15 +516,27 @@ describe("ConsolidationStage", () => {
     const provider: IntelligenceProvider = {
       id: "provider.test",
       summarize: async () => "",
-      runAgent: async (prompt: string, tools: unknown[], options: RunAgentOptions = {}) => {
+      runAgent: async (
+        prompt: string,
+        tools: unknown[],
+        options: RunAgentOptions = {},
+      ) => {
         calls.push({ prompt, options });
         if (!options.selectedAgent) {
-          const typedTools = tools as Array<{ name: string; handler: (args: Record<string, unknown>) => unknown }>;
-          const finalizeTool = typedTools.find((tool) => tool.name === "finalize_consolidation");
-          finalizeTool?.handler({ status: "no_changes_needed", summary: "Reviewed specialist outputs." });
+          const typedTools = tools as Array<{
+            name: string;
+            handler: (args: Record<string, unknown>) => unknown;
+          }>;
+          const finalizeTool = typedTools.find(
+            (tool) => tool.name === "finalize_consolidation",
+          );
+          finalizeTool?.handler({
+            status: "no_changes_needed",
+            summary: "Reviewed specialist outputs.",
+          });
         }
         return "";
-      }
+      },
     };
 
     const pack: RuntimeStageAgentPackConfig = {
@@ -307,27 +544,65 @@ describe("ConsolidationStage", () => {
       customAgents: [
         {
           name: "memory-inventory-reviewer",
-          tools: ["bash", "read_bash", "view", "list_memories", "read_reference"],
-          promptTemplatePath: "prompts/stages/consolidation/agents/memory-inventory-reviewer.md",
-          infer: false
+          tools: [
+            "bash",
+            "read_bash",
+            "view",
+            "list_memories",
+            "read_reference",
+          ],
+          promptTemplatePath:
+            "prompts/stages/consolidation/agents/memory-inventory-reviewer.md",
+          infer: false,
         },
         {
           name: "contradiction-scope-reviewer",
-          tools: ["bash", "read_bash", "view", "list_memories", "read_reference"],
-          promptTemplatePath: "prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
-          infer: false
+          tools: [
+            "bash",
+            "read_bash",
+            "view",
+            "list_memories",
+            "read_reference",
+          ],
+          promptTemplatePath:
+            "prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
+          infer: false,
         },
         {
           name: "reference-validator",
-          tools: ["bash", "read_bash", "view", "list_memories", "read_reference"],
-          promptTemplatePath: "prompts/stages/consolidation/agents/reference-validator.md",
-          infer: false
-        }
+          tools: [
+            "bash",
+            "read_bash",
+            "view",
+            "list_memories",
+            "read_reference",
+          ],
+          promptTemplatePath:
+            "prompts/stages/consolidation/agents/reference-validator.md",
+          infer: false,
+        },
+        {
+          name: "global-rule-extractor",
+          tools: [
+            "bash",
+            "read_bash",
+            "view",
+            "list_memories",
+            "read_reference",
+          ],
+          promptTemplatePath:
+            "prompts/stages/consolidation/agents/global-rule-extractor.md",
+          infer: false,
+        },
       ],
       execution: {
         mode: "explicit-sequence",
-        explicitSequence: ["memory-inventory-reviewer", "contradiction-scope-reviewer", "reference-validator"]
-      }
+        explicitSequence: [
+          "memory-inventory-reviewer",
+          "contradiction-scope-reviewer",
+          "reference-validator",
+        ],
+      },
     };
 
     const stage = new ConsolidationStage(provider, pack);
@@ -337,7 +612,7 @@ describe("ConsolidationStage", () => {
       scope: "workspace",
       statement: "Run unit tests before merge",
       confidence: 0.9,
-      provenance: { source: "test", eventIds: [], capturedAt: context.nowIso }
+      provenance: { source: "test", eventIds: [], capturedAt: context.nowIso },
     });
 
     await stage.run(context);
@@ -346,10 +621,16 @@ describe("ConsolidationStage", () => {
       "memory-inventory-reviewer",
       "contradiction-scope-reviewer",
       "reference-validator",
-      undefined
+      undefined,
+      "global-rule-extractor",
+      undefined,
     ]);
-    expect(calls[0]?.prompt).toContain("Specialist pass 1/3: memory-inventory-reviewer");
+    expect(calls[0]?.prompt).toContain(
+      "Specialist pass 1/3: memory-inventory-reviewer",
+    );
     expect(calls[3]?.options.streamTag).toBe("consolidation main");
+    expect(calls[4]?.options.streamTag).toBe("consolidation global specialist");
+    expect(calls[5]?.options.streamTag).toBe("consolidation global main");
   });
 
   it("insists on finalize_consolidation and skips applying changes when verdict is missing", async () => {
@@ -360,13 +641,17 @@ describe("ConsolidationStage", () => {
       runAgent: async (prompt: string) => {
         prompts.push(prompt);
         return "";
-      }
+      },
     };
 
     const stage = new ConsolidationStage(provider);
     const context = buildContext(process.cwd(), "run-no-verdict");
-    context.insights = [{ statement: "Use concise status updates", scope: "workspace" }];
-    await expect(stage.run(context)).rejects.toThrow(/missing required finalize_consolidation/);
+    context.insights = [
+      { statement: "Use concise status updates", scope: "workspace" },
+    ];
+    await expect(stage.run(context)).rejects.toThrow(
+      /missing required finalize_consolidation/,
+    );
 
     expect(prompts.length).toBe(2);
   });

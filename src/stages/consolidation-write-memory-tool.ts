@@ -10,6 +10,10 @@ import { workspaceId as resolveWorkspaceId } from "../dream/dreamer-home.js";
 import { inferEvidenceAndReferences } from "./consolidation-memory-metadata.js";
 import { validateReferencesStrict } from "./consolidation-reference-validation.js";
 import {
+  inferWorkspaceDirFromSessionIds,
+  resolveMemoryScopeBySessionWorkspace,
+} from "./consolidation-workspace-scope.js";
+import {
   EVIDENCE_ITEM_SCHEMA,
   REFERENCE_ITEM_SCHEMA,
   normalizeEvidence,
@@ -20,12 +24,15 @@ import {
 } from "./memory-tool-shared.js";
 
 type CreateWriteMemoryToolOptions = {
+  toolName: "write_workspace_memory" | "write_global_memory";
+  forcedScope: "workspace" | "user";
   memories: MemoryRecord[];
   nowIso: string;
   insights: InsightRecord[];
   runId: string;
   workspaceDir: string;
   runDir: string;
+  sessionWorkspaceById: Map<string, string>;
   onAdded: (record: MemoryRecord) => void;
   onUpdated: () => void;
 };
@@ -65,7 +72,6 @@ function formatCopilotDestination(
 }
 
 export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
-  const attributionWorkspaceId = resolveWorkspaceId(options.workspaceDir);
   const repoRemoteUrl = readGitField(options.workspaceDir, [
     "config",
     "--get",
@@ -78,14 +84,15 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
   ]);
   const repoCommit = readGitField(options.workspaceDir, ["rev-parse", "HEAD"]);
 
-  return defineTool("write_memory", {
+  return defineTool(options.toolName, {
     description:
-      "Add or update memory by statement+scope. Requires reason, horizon, and at least one reference.",
+      options.forcedScope === "workspace"
+        ? "Add or update workspace memory only."
+        : "Add or update global user memory only.",
     parameters: {
       type: "object",
       properties: {
         statement: { type: "string" },
-        scope: { type: "string", enum: ["user", "workspace"] },
         confidence: { type: "number", description: "0.0-1.0" },
         category: { type: "string", enum: [...MEMORY_CATEGORIES] },
         tags: { type: "array", items: { type: "string" } },
@@ -97,13 +104,13 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
         references: { type: "array", items: REFERENCE_ITEM_SCHEMA },
         evidence: { type: "array", items: EVIDENCE_ITEM_SCHEMA },
       },
-      required: ["statement", "scope", "reason", "references", "horizon"],
+      required: ["statement", "reason", "references", "horizon"],
     },
     skipPermission: true,
     handler: (args) => {
       const input = args as Record<string, unknown>;
       const statement = String(input.statement ?? "").trim();
-      const scope = input.scope === "user" ? "user" : ("workspace" as const);
+      const requestedScope = options.forcedScope;
       const confidence = Math.min(
         1,
         Math.max(0, Number(input.confidence) || 0.85),
@@ -171,6 +178,29 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
       );
       const evidence = derived.evidence;
       const mergedReferences = derived.references;
+      const scopeDecision = resolveMemoryScopeBySessionWorkspace(
+        requestedScope,
+        options.workspaceDir,
+        options.sessionWorkspaceById,
+        derived.sessionIds,
+      );
+      const scope = scopeDecision.scope;
+      if (options.forcedScope === "workspace" && scope !== "workspace") {
+        return {
+          textResultForLlm:
+            "Workspace write rejected: evidence resolves outside this workspace.",
+          resultType: "error" as const,
+        };
+      }
+      const inferredWorkspaceDir = inferWorkspaceDirFromSessionIds(
+        options.sessionWorkspaceById,
+        derived.sessionIds,
+      );
+      const attributionWorkspaceDir =
+        inferredWorkspaceDir ?? options.workspaceDir;
+      const attributionWorkspaceId = resolveWorkspaceId(
+        attributionWorkspaceDir,
+      );
 
       const existing = options.memories.find(
         (m) => m.statement === statement && m.scope === scope,
@@ -204,7 +234,7 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
             : [`run:${options.runId}`],
           capturedAt: options.nowIso,
           workspaceId: attributionWorkspaceId,
-          workspaceDir: options.workspaceDir,
+          workspaceDir: attributionWorkspaceDir,
           repoRemoteUrl,
           repoBranch,
           repoCommit,
@@ -233,7 +263,7 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
             : [`run:${options.runId}`],
           capturedAt: options.nowIso,
           workspaceId: attributionWorkspaceId,
-          workspaceDir: options.workspaceDir,
+          workspaceDir: attributionWorkspaceDir,
           repoRemoteUrl,
           repoBranch,
           repoCommit,

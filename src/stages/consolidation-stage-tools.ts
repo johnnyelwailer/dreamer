@@ -1,15 +1,23 @@
 import { defineTool } from "@github/copilot-sdk";
-import type { InsightRecord, MemoryRecord } from "../core/types.js";
-import { createWriteMemoryTool } from "./consolidation-write-memory-tool.js";
+import type {
+  InsightRecord,
+  MemoryRecord,
+  NormalizedEvent,
+} from "../core/types.js";
 import { createReadReferenceTool } from "./consolidation-reference-tool.js";
+import { createWriteMemoryTool } from "./consolidation-write-memory-tool.js";
+
+export type ConsolidationWriteToolKind = "workspace" | "global";
 
 export function createConsolidationTools(
   memories: MemoryRecord[],
   nowIso: string,
   insights: InsightRecord[],
+  events: NormalizedEvent[],
   runId: string,
   workspaceDir: string,
-  runDir: string
+  runDir: string,
+  writeToolKind: ConsolidationWriteToolKind,
 ) {
   const added: MemoryRecord[] = [];
   let updated = 0;
@@ -17,50 +25,75 @@ export function createConsolidationTools(
   let finalVerdict: { status: string; summary: string } | null = null;
 
   const listMemoriesTool = defineTool("list_memories", {
-    description: "List all current memories with their ids, statements, scopes, and confidence scores.",
+    description:
+      "List all current memories with their ids, statements, scopes, and confidence scores.",
     parameters: { type: "object", properties: {} },
     skipPermission: true,
     handler: () => {
       const active = memories.filter((m) => !removedIds.has(m.id));
       return {
-        textResultForLlm: JSON.stringify(active.map((m) => ({
-          id: m.id,
-          scope: m.scope,
-          statement: m.statement,
-          confidence: m.confidence,
-          category: m.context?.category,
-          tags: m.context?.tags,
-          horizon: m.capture?.horizon,
-          expiresAt: m.capture?.expiresAt,
-          reason: m.capture?.reason,
-          references: m.capture?.references
-            ?? m.context?.references?.map((value) => {
-              const [kind, ...rest] = value.split(":");
-              return { kind, value: rest.join(":") };
-            }),
-          rationale: m.context?.rationale,
-          appliesWhen: m.context?.appliesWhen,
-          evidence: m.evidence,
-          provenance: m.provenance
-        }))),
-        resultType: "success" as const
+        textResultForLlm: JSON.stringify(
+          active.map((m) => ({
+            id: m.id,
+            scope: m.scope,
+            statement: m.statement,
+            confidence: m.confidence,
+            category: m.context?.category,
+            tags: m.context?.tags,
+            horizon: m.capture?.horizon,
+            expiresAt: m.capture?.expiresAt,
+            reason: m.capture?.reason,
+            references:
+              m.capture?.references ??
+              m.context?.references?.map((value) => {
+                const [kind, ...rest] = value.split(":");
+                return { kind, value: rest.join(":") };
+              }),
+            rationale: m.context?.rationale,
+            appliesWhen: m.context?.appliesWhen,
+            evidence: m.evidence,
+            provenance: m.provenance,
+          })),
+        ),
+        resultType: "success" as const,
       };
-    }
+    },
   });
 
   const readReferenceTool = createReadReferenceTool({ workspaceDir, runDir });
 
+  const sessionWorkspaceById = new Map<string, string>();
+  for (const event of events) {
+    if (event.kind !== "session_start") continue;
+    const sessionIdRaw = event.metadata.sessionId;
+    const workspaceDirRaw = event.metadata.workspaceDir;
+    if (typeof sessionIdRaw !== "string" || sessionIdRaw.trim().length === 0)
+      continue;
+    if (
+      typeof workspaceDirRaw !== "string" ||
+      workspaceDirRaw.trim().length === 0
+    )
+      continue;
+    sessionWorkspaceById.set(sessionIdRaw, workspaceDirRaw);
+  }
+
   const writeMemoryTool = createWriteMemoryTool({
+    toolName:
+      writeToolKind === "workspace"
+        ? "write_workspace_memory"
+        : "write_global_memory",
+    forcedScope: writeToolKind === "workspace" ? "workspace" : "user",
     memories,
     nowIso,
     insights,
     runId,
     workspaceDir,
     runDir,
+    sessionWorkspaceById,
     onAdded: (record) => added.push(record),
     onUpdated: () => {
       updated++;
-    }
+    },
   });
 
   const removeMemoryTool = defineTool("remove_memory", {
@@ -68,46 +101,77 @@ export function createConsolidationTools(
     parameters: {
       type: "object",
       properties: { id: { type: "string" } },
-      required: ["id"]
+      required: ["id"],
     },
     skipPermission: true,
     handler: (args) => {
       const input = args as Record<string, unknown>;
       const id = String(input.id ?? "");
       const exists = memories.some((m) => m.id === id);
-      if (!exists) return { textResultForLlm: "Memory not found.", resultType: "error" as const };
+      if (!exists)
+        return {
+          textResultForLlm: "Memory not found.",
+          resultType: "error" as const,
+        };
       removedIds.add(id);
-      return { textResultForLlm: "Memory removed.", resultType: "success" as const };
-    }
+      return {
+        textResultForLlm: "Memory removed.",
+        resultType: "success" as const,
+      };
+    },
   });
 
   const finalizeConsolidationTool = defineTool("finalize_consolidation", {
-    description: "Record the final consolidation verdict before finishing the stage.",
+    description:
+      "Record the final consolidation verdict before finishing the stage.",
     parameters: {
       type: "object",
       properties: {
-        status: { type: "string", enum: ["completed", "no_changes_needed", "blocked"] },
-        summary: { type: "string" }
+        status: {
+          type: "string",
+          enum: ["completed", "no_changes_needed", "blocked"],
+        },
+        summary: { type: "string" },
       },
-      required: ["status", "summary"]
+      required: ["status", "summary"],
     },
     skipPermission: true,
     handler: (args) => {
       const input = args as Record<string, unknown>;
-      const status = String(input.status ?? "").trim().slice(0, 64);
-      const summary = String(input.summary ?? "").trim().slice(0, 400);
+      const status = String(input.status ?? "")
+        .trim()
+        .slice(0, 64);
+      const summary = String(input.summary ?? "")
+        .trim()
+        .slice(0, 400);
       if (!status) {
-        return { textResultForLlm: "finalize_consolidation requires a status.", resultType: "error" as const };
+        return {
+          textResultForLlm: "finalize_consolidation requires a status.",
+          resultType: "error" as const,
+        };
       }
       if (!summary) {
-        return { textResultForLlm: "finalize_consolidation requires a summary.", resultType: "error" as const };
+        return {
+          textResultForLlm: "finalize_consolidation requires a summary.",
+          resultType: "error" as const,
+        };
       }
       finalVerdict = { status, summary };
-      return { textResultForLlm: "Consolidation verdict recorded.", resultType: "success" as const };
-    }
+      return {
+        textResultForLlm: "Consolidation verdict recorded.",
+        resultType: "success" as const,
+      };
+    },
   });
 
-  function applyChanges(ctx: { memories: MemoryRecord[]; metrics: { memoriesAdded: number; memoriesUpdated: number; contradictionsFound: number } }): void {
+  function applyChanges(ctx: {
+    memories: MemoryRecord[];
+    metrics: {
+      memoriesAdded: number;
+      memoriesUpdated: number;
+      contradictionsFound: number;
+    };
+  }): void {
     ctx.memories = memories.filter((m) => !removedIds.has(m.id));
     ctx.metrics.memoriesAdded += added.length;
     ctx.metrics.memoriesUpdated += updated;
@@ -123,9 +187,15 @@ export function createConsolidationTools(
   }
 
   return {
-    tools: [listMemoriesTool, readReferenceTool, writeMemoryTool, removeMemoryTool, finalizeConsolidationTool],
+    tools: [
+      listMemoriesTool,
+      readReferenceTool,
+      writeMemoryTool,
+      removeMemoryTool,
+      finalizeConsolidationTool,
+    ],
     applyChanges,
     hasFinalVerdict,
-    getFinalVerdict
+    getFinalVerdict,
   };
 }
