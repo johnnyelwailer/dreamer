@@ -169,13 +169,7 @@
             "name": "memory-inventory-reviewer",
             "displayName": "Memory Inventory Reviewer",
             "description": "Summarizes existing memories and flags duplicates, over-specific entries, and broad rules needing cleanup.",
-            "tools": [
-              "bash",
-              "read_bash",
-              "view",
-              "list_memories",
-              "read_reference"
-            ],
+            "tools": ["view", "list_memories", "read_reference"],
             "promptTemplatePath": "prompts/stages/consolidation/agents/memory-inventory-reviewer.md",
             "infer": true
           },
@@ -183,13 +177,7 @@
             "name": "contradiction-scope-reviewer",
             "displayName": "Contradiction Scope Reviewer",
             "description": "Classifies conflicts as true conflicts, conditional compatibility, overgeneralized memories, or stale rules.",
-            "tools": [
-              "bash",
-              "read_bash",
-              "view",
-              "list_memories",
-              "read_reference"
-            ],
+            "tools": ["view", "list_memories", "read_reference"],
             "promptTemplatePath": "prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
             "infer": true
           },
@@ -197,13 +185,7 @@
             "name": "reference-validator",
             "displayName": "Reference Validator",
             "description": "Validates cited references for risky memory writes/removals and reports evidence quality to the main agent.",
-            "tools": [
-              "bash",
-              "read_bash",
-              "view",
-              "list_memories",
-              "read_reference"
-            ],
+            "tools": ["view", "list_memories", "read_reference"],
             "promptTemplatePath": "prompts/stages/consolidation/agents/reference-validator.md",
             "infer": true
           },
@@ -211,13 +193,7 @@
             "name": "global-rule-extractor",
             "displayName": "Global Rule Extractor",
             "description": "Finds only broadly generalizable user-scope rules and filters out workspace-local patterns.",
-            "tools": [
-              "bash",
-              "read_bash",
-              "view",
-              "list_memories",
-              "read_reference"
-            ],
+            "tools": ["view", "list_memories", "read_reference"],
             "promptTemplatePath": "prompts/stages/consolidation/agents/global-rule-extractor.md",
             "infer": true
           }

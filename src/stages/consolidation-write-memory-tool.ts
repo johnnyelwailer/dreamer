@@ -188,8 +188,8 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
       if (options.forcedScope === "workspace" && scope !== "workspace") {
         return {
           textResultForLlm:
-            "Workspace write rejected: evidence resolves outside this workspace.",
-          resultType: "error" as const,
+            "Workspace write deferred: evidence resolves outside this workspace. Do not retry in this pass; let post-consolidation global pass decide with write_global_memory.",
+          resultType: "success" as const,
         };
       }
       const inferredWorkspaceDir = inferWorkspaceDirFromSessionIds(

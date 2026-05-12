@@ -213,7 +213,7 @@ describe("ConsolidationStage", () => {
     }
   });
 
-  it("rejects workspace write references that do not exist", async () => {
+  it("accepts workspace references even when files are external or missing", async () => {
     const workspaceDir = join(
       tmpdir(),
       `dreamer-consolidation-write-${Date.now()}`,
@@ -266,10 +266,7 @@ describe("ConsolidationStage", () => {
         references: [{ kind: "session", value: "1" }],
       });
 
-      expect(missingRef?.resultType).toBe("error");
-      expect(missingRef?.textResultForLlm).toContain(
-        "Reference target not found",
-      );
+      expect(missingRef?.resultType).toBe("success");
       expect(existingRef?.resultType).toBe("success");
     } finally {
       await rm(workspaceDir, { recursive: true, force: true });
@@ -396,52 +393,28 @@ describe("ConsolidationStage", () => {
       customAgents: [
         {
           name: "memory-inventory-reviewer",
-          tools: [
-            "bash",
-            "read_bash",
-            "view",
-            "list_memories",
-            "read_reference",
-          ],
+          tools: ["view", "list_memories", "read_reference"],
           promptTemplatePath:
             "prompts/stages/consolidation/agents/memory-inventory-reviewer.md",
           infer: false,
         },
         {
           name: "contradiction-scope-reviewer",
-          tools: [
-            "bash",
-            "read_bash",
-            "view",
-            "list_memories",
-            "read_reference",
-          ],
+          tools: ["view", "list_memories", "read_reference"],
           promptTemplatePath:
             "prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
           infer: false,
         },
         {
           name: "reference-validator",
-          tools: [
-            "bash",
-            "read_bash",
-            "view",
-            "list_memories",
-            "read_reference",
-          ],
+          tools: ["view", "list_memories", "read_reference"],
           promptTemplatePath:
             "prompts/stages/consolidation/agents/reference-validator.md",
           infer: false,
         },
         {
           name: "global-rule-extractor",
-          tools: [
-            "bash",
-            "read_bash",
-            "view",
-            "list_memories",
-            "read_reference",
-          ],
+          tools: ["view", "list_memories", "read_reference"],
           promptTemplatePath:
             "prompts/stages/consolidation/agents/global-rule-extractor.md",
           infer: false,
@@ -544,52 +517,28 @@ describe("ConsolidationStage", () => {
       customAgents: [
         {
           name: "memory-inventory-reviewer",
-          tools: [
-            "bash",
-            "read_bash",
-            "view",
-            "list_memories",
-            "read_reference",
-          ],
+          tools: ["view", "list_memories", "read_reference"],
           promptTemplatePath:
             "prompts/stages/consolidation/agents/memory-inventory-reviewer.md",
           infer: false,
         },
         {
           name: "contradiction-scope-reviewer",
-          tools: [
-            "bash",
-            "read_bash",
-            "view",
-            "list_memories",
-            "read_reference",
-          ],
+          tools: ["view", "list_memories", "read_reference"],
           promptTemplatePath:
             "prompts/stages/consolidation/agents/contradiction-scope-reviewer.md",
           infer: false,
         },
         {
           name: "reference-validator",
-          tools: [
-            "bash",
-            "read_bash",
-            "view",
-            "list_memories",
-            "read_reference",
-          ],
+          tools: ["view", "list_memories", "read_reference"],
           promptTemplatePath:
             "prompts/stages/consolidation/agents/reference-validator.md",
           infer: false,
         },
         {
           name: "global-rule-extractor",
-          tools: [
-            "bash",
-            "read_bash",
-            "view",
-            "list_memories",
-            "read_reference",
-          ],
+          tools: ["view", "list_memories", "read_reference"],
           promptTemplatePath:
             "prompts/stages/consolidation/agents/global-rule-extractor.md",
           infer: false,

@@ -52,7 +52,7 @@ Consolidation rules:
 - Scope: use "user" for personal preferences/habits, "workspace" for project-specific facts
 - Confidence: 0.9 for clear explicit corrections, 0.85 for observed patterns, 0.75 for inferred preferences
 - Source validation: require specialist summaries from read_reference before pruning, contradicting, or materially rewriting a memory with references. If references are missing or unreadable, lower confidence or add precise run/session references rather than inventing certainty.
-- Deduplicate: before calling write_memory, check whether a memory covering the same fact (same file path, URL, command, or concept) already exists — if so, merge and skip the duplicate
+- Deduplicate: before calling a scoped write tool, check whether a memory covering the same fact (same file path, URL, command, or concept) already exists — if so, merge and skip the duplicate
 - Merge/generalize: if several narrow memories point to the same stable rule, replace them with one broader memory that keeps the important applies_when boundaries and references
 - Localize: if an insight is super-specific, either skip it or write it with tight applies_when, tags, evidence, and references so future agents do not overapply it
 - Skip: don't write vague, ephemeral, or redundant memories

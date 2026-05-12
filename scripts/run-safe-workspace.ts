@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -144,7 +146,8 @@ function main(): void {
     stdio: "inherit",
     env: {
       ...process.env,
-      DREAMER_ENV_SOURCE_DIR: process.env.DREAMER_ENV_SOURCE_DIR ?? workspaceDir,
+      DREAMER_ENV_SOURCE_DIR:
+        process.env.DREAMER_ENV_SOURCE_DIR ?? workspaceDir,
       DREAMER_WORKSPACE_DIR: worktreeDir,
       DREAMER_SAFE_WORKTREE: worktreeDir,
     },
