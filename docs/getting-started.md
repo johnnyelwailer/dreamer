@@ -76,16 +76,10 @@ pnpm dream
 
 This runs in an isolated git worktree on a dedicated branch by default.
 
-For global/non-repo dreaming (no worktree isolation), use:
+To run with Honcho backend in isolated mode, use:
 
 ```bash
 pnpm dream:honcho
-```
-
-If you want Honcho with repo worktree isolation, use:
-
-```bash
-pnpm dream:honcho:safe
 ```
 
 Expected outputs include:
@@ -130,20 +124,7 @@ It updates:
 - `reports/evals/dream-self-improve.json`
 - `.dreamer/config/prompts/docs-improvement-hints.md` (when improvements are persisted)
 
-For branch-safe execution, run on isolated worktrees:
-
-```bash
-pnpm safe:eval:dream-quality
-pnpm safe:improve:dream
-```
-
-Unsafe direct-run variants (no worktree isolation):
-
-```bash
-pnpm dream:unsafe
-pnpm eval:dream-quality:unsafe
-pnpm improve:dream:unsafe
-```
+All dream/improve runs use isolated worktree mode by default.
 
 ## 8. Validate Locally
 

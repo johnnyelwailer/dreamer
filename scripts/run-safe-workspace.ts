@@ -21,7 +21,7 @@ function parseArgs(argv: string[]): SafeRunOptions {
     command: "pnpm improve:dream",
     branchPrefix: "dreamer/agent",
     keepWorktree: true,
-    allowDirtyWorkspace: true,
+    allowDirtyWorkspace: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {

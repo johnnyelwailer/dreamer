@@ -142,14 +142,12 @@ Primary workflows:
 ```bash
 pnpm dream
 pnpm dream:honcho
-pnpm dream:honcho:safe
 pnpm eval:dream-quality
 pnpm improve:dream
 ```
 
-- `pnpm dream` uses repo worktree isolation.
-- `pnpm dream:honcho` runs without worktree isolation (useful for global/non-repo style runs).
-- `pnpm dream:honcho:safe` runs Honcho with repo worktree isolation.
+- `pnpm dream` runs in isolated repo worktree mode.
+- `pnpm dream:honcho` runs Honcho in isolated repo worktree mode.
 
 Session scoping controls:
 
