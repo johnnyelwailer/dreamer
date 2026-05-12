@@ -1,12 +1,12 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import type { MemoryBackend } from "../core/contracts.js";
+import type { MemoryRecord } from "../core/types.js";
 import {
   defaultCopilotMemoryTarget,
   discoverCopilotGlobalMemoryRoot,
-  discoverCopilotWorkspaceMemoryRoot
+  discoverCopilotWorkspaceMemoryRoot,
 } from "../dream/copilot-memory-path.js";
-import type { MemoryBackend } from "../core/contracts.js";
-import type { MemoryRecord } from "../core/types.js";
 
 type CopilotMemoryDoc = {
   version: string;
@@ -17,7 +17,12 @@ type CopilotMemoryDoc = {
 type CopilotTarget =
   | { kind: "legacy-json-file"; path: string }
   | { kind: "markdown-file"; path: string }
-  | { kind: "memory-root"; path: string; userPath: string; workspacePath: string };
+  | {
+      kind: "memory-root";
+      path: string;
+      userPath: string;
+      workspacePath: string;
+    };
 
 const MACHINE_BLOCK_START = "<!-- dreamer:records:start -->";
 const MACHINE_BLOCK_END = "<!-- dreamer:records:end -->";
@@ -25,15 +30,21 @@ const USER_MEMORY_FILE = "dreamer-memory.md";
 const REPO_MEMORY_FILE = "dreamer-repo-memory.md";
 const SESSION_MEMORY_FILE = "dreamer-session-memory.md";
 
-function recordsForScope(records: MemoryRecord[], scope: "user" | "repo" | "session"): MemoryRecord[] {
-  if (scope === "repo") return records.filter((record) => record.scope === "workspace");
+function recordsForScope(
+  records: MemoryRecord[],
+  scope: "user" | "repo" | "session",
+): MemoryRecord[] {
+  if (scope === "repo")
+    return records.filter((record) => record.scope === "workspace");
   return records.filter((record) => record.scope === scope);
 }
 
 function renderMarkdown(records: MemoryRecord[]): string {
   const statements = records
     .map((record) => {
-      const confidence = Number.isFinite(record.confidence) ? record.confidence.toFixed(2) : "0.50";
+      const confidence = Number.isFinite(record.confidence)
+        ? record.confidence.toFixed(2)
+        : "0.50";
       return `- ${record.statement} (confidence: ${confidence})`;
     })
     .join("\n");
@@ -50,7 +61,7 @@ function renderMarkdown(records: MemoryRecord[]): string {
     JSON.stringify(records, null, 2),
     "```",
     MACHINE_BLOCK_END,
-    ""
+    "",
   ].join("\n");
 }
 
@@ -67,20 +78,29 @@ function parseMachineBlock(content: string): MemoryRecord[] {
   try {
     const parsed = JSON.parse(jsonText) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((row): row is MemoryRecord => Boolean(row && typeof row === "object"));
+    return parsed.filter((row): row is MemoryRecord =>
+      Boolean(row && typeof row === "object"),
+    );
   } catch {
     return [];
   }
 }
 
-function parseBulletStatements(content: string, scope: MemoryRecord["scope"], source: string): MemoryRecord[] {
+function parseBulletStatements(
+  content: string,
+  scope: MemoryRecord["scope"],
+  source: string,
+): MemoryRecord[] {
   const records: MemoryRecord[] = [];
   const lines = content.split(/\r?\n/);
   let index = 0;
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("- ")) continue;
-    const statement = trimmed.slice(2).replace(/\s*\(confidence:.*\)\s*$/i, "").trim();
+    const statement = trimmed
+      .slice(2)
+      .replace(/\s*\(confidence:.*\)\s*$/i, "")
+      .trim();
     if (!statement) continue;
     records.push({
       id: `${source}-${index++}`,
@@ -90,8 +110,8 @@ function parseBulletStatements(content: string, scope: MemoryRecord["scope"], so
       provenance: {
         source,
         eventIds: [],
-        capturedAt: new Date(0).toISOString()
-      }
+        capturedAt: new Date(0).toISOString(),
+      },
     });
   }
   return records;
@@ -99,7 +119,8 @@ function parseBulletStatements(content: string, scope: MemoryRecord["scope"], so
 
 function scopeFromPath(path: string): MemoryRecord["scope"] {
   if (path.includes("/repo/") || path.includes("\\repo\\")) return "workspace";
-  if (path.includes("/session/") || path.includes("\\session\\")) return "session";
+  if (path.includes("/session/") || path.includes("\\session\\"))
+    return "session";
   return "user";
 }
 
@@ -123,14 +144,20 @@ export class CopilotMemoryBackend implements MemoryBackend {
         kind: "memory-root",
         path: resolvedPath,
         userPath: resolvedPath,
-        workspacePath: resolvedPath
+        workspacePath: resolvedPath,
       };
       return;
     }
 
-    const workspacePath = discoverCopilotWorkspaceMemoryRoot(workspaceDir, false) ?? resolvedPath;
+    const workspacePath =
+      discoverCopilotWorkspaceMemoryRoot(workspaceDir, false) ?? resolvedPath;
     const userPath = discoverCopilotGlobalMemoryRoot(false) ?? workspacePath;
-    this.target = { kind: "memory-root", path: resolvedPath, userPath, workspacePath };
+    this.target = {
+      kind: "memory-root",
+      path: resolvedPath,
+      userPath,
+      workspacePath,
+    };
   }
 
   async load(): Promise<MemoryRecord[]> {
@@ -147,7 +174,7 @@ export class CopilotMemoryBackend implements MemoryBackend {
           contradictoryTo: record.contradictoryTo,
           context: record.context,
           evidence: record.evidence,
-          capture: record.capture
+          capture: record.capture,
         }));
       } catch {
         return [];
@@ -159,7 +186,11 @@ export class CopilotMemoryBackend implements MemoryBackend {
         const raw = await readFile(this.target.path, "utf8");
         const fromMachineBlock = parseMachineBlock(raw);
         if (fromMachineBlock.length > 0) return fromMachineBlock;
-        return parseBulletStatements(raw, "workspace", "copilot-memory-markdown");
+        return parseBulletStatements(
+          raw,
+          "workspace",
+          "copilot-memory-markdown",
+        );
       } catch {
         return [];
       }
@@ -167,8 +198,14 @@ export class CopilotMemoryBackend implements MemoryBackend {
 
     const files: Array<{ path: string; scope: MemoryRecord["scope"] }> = [
       { path: join(this.target.userPath, USER_MEMORY_FILE), scope: "user" },
-      { path: join(this.target.workspacePath, "repo", REPO_MEMORY_FILE), scope: "workspace" },
-      { path: join(this.target.workspacePath, "session", SESSION_MEMORY_FILE), scope: "session" }
+      {
+        path: join(this.target.workspacePath, "repo", REPO_MEMORY_FILE),
+        scope: "workspace",
+      },
+      {
+        path: join(this.target.workspacePath, "session", SESSION_MEMORY_FILE),
+        scope: "session",
+      },
     ];
 
     const loaded: MemoryRecord[] = [];
@@ -177,10 +214,17 @@ export class CopilotMemoryBackend implements MemoryBackend {
         const raw = await readFile(file.path, "utf8");
         const fromMachineBlock = parseMachineBlock(raw);
         if (fromMachineBlock.length > 0) {
-          loaded.push(...fromMachineBlock.map((record) => ({ ...record, scope: file.scope })));
+          loaded.push(
+            ...fromMachineBlock.map((record) => ({
+              ...record,
+              scope: file.scope,
+            })),
+          );
           continue;
         }
-        loaded.push(...parseBulletStatements(raw, file.scope, "copilot-memory-markdown"));
+        loaded.push(
+          ...parseBulletStatements(raw, file.scope, "copilot-memory-markdown"),
+        );
       } catch {
         continue;
       }
@@ -195,11 +239,13 @@ export class CopilotMemoryBackend implements MemoryBackend {
       join(this.target.workspacePath, "repo"),
       join(this.target.workspacePath, "session"),
       join(this.target.path, "repo"),
-      join(this.target.path, "session")
+      join(this.target.path, "session"),
     ];
     const uniqueFallbackDirs = [...new Set(fallbackDirs)];
     for (const folder of uniqueFallbackDirs) {
-      const entries = await readdir(folder, { withFileTypes: true }).catch(() => []);
+      const entries = await readdir(folder, { withFileTypes: true }).catch(
+        () => [],
+      );
       for (const entry of entries) {
         if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
         const fullPath = join(folder, entry.name);
@@ -208,10 +254,21 @@ export class CopilotMemoryBackend implements MemoryBackend {
           const inferredScope = scopeFromPath(fullPath);
           const fromMachineBlock = parseMachineBlock(raw);
           if (fromMachineBlock.length > 0) {
-            loaded.push(...fromMachineBlock.map((record) => ({ ...record, scope: inferredScope })));
+            loaded.push(
+              ...fromMachineBlock.map((record) => ({
+                ...record,
+                scope: inferredScope,
+              })),
+            );
             continue;
           }
-          loaded.push(...parseBulletStatements(raw, inferredScope, "copilot-memory-markdown"));
+          loaded.push(
+            ...parseBulletStatements(
+              raw,
+              inferredScope,
+              "copilot-memory-markdown",
+            ),
+          );
         } catch {
           continue;
         }
@@ -228,11 +285,15 @@ export class CopilotMemoryBackend implements MemoryBackend {
         records: records.map((record) => ({
           ...record,
           citations: record.provenance.eventIds,
-          validated: record.confidence >= 0.7
-        }))
+          validated: record.confidence >= 0.7,
+        })),
       };
       await mkdir(dirname(this.target.path), { recursive: true });
-      await writeFile(this.target.path, JSON.stringify(payload, null, 2), "utf8");
+      await writeFile(
+        this.target.path,
+        JSON.stringify(payload, null, 2),
+        "utf8",
+      );
       return;
     }
 
@@ -245,16 +306,16 @@ export class CopilotMemoryBackend implements MemoryBackend {
     const scopedFiles = [
       {
         scope: "user" as const,
-        path: join(this.target.userPath, USER_MEMORY_FILE)
+        path: join(this.target.userPath, USER_MEMORY_FILE),
       },
       {
         scope: "repo" as const,
-        path: join(this.target.workspacePath, "repo", REPO_MEMORY_FILE)
+        path: join(this.target.workspacePath, "repo", REPO_MEMORY_FILE),
       },
       {
         scope: "session" as const,
-        path: join(this.target.workspacePath, "session", SESSION_MEMORY_FILE)
-      }
+        path: join(this.target.workspacePath, "session", SESSION_MEMORY_FILE),
+      },
     ];
 
     for (const file of scopedFiles) {
