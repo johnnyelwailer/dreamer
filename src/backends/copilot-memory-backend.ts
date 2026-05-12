@@ -28,6 +28,12 @@ type CopilotTarget =
 const MACHINE_BLOCK_START = "<!-- dreamer:records:start -->";
 const MACHINE_BLOCK_END = "<!-- dreamer:records:end -->";
 
+export type CopilotTargetPaths = {
+  resolvedPath: string;
+  userPath: string;
+  workspacePath: string;
+};
+
 function recordsForScope(
   records: MemoryRecord[],
   scope: "user" | "repo" | "session",
@@ -82,6 +88,61 @@ function pathsMatch(left?: string, right?: string): boolean {
     right &&
     normalizeComparablePath(left) === normalizeComparablePath(right),
   );
+}
+
+export function resolveCopilotTargetPaths(
+  workspaceDir: string,
+  targetPath?: string,
+): CopilotTargetPaths {
+  const resolvedPath = targetPath ?? defaultCopilotMemoryTarget(workspaceDir);
+  const discoveredWorkspacePath = discoverCopilotWorkspaceMemoryRoot(
+    workspaceDir,
+    false,
+  );
+  const discoveredGlobalPath = discoverCopilotGlobalMemoryRoot(false);
+
+  if (targetPath) {
+    const usesOfficialCopilotRoot =
+      pathsMatch(resolvedPath, discoveredGlobalPath) ||
+      pathsMatch(resolvedPath, discoveredWorkspacePath);
+    if (usesOfficialCopilotRoot) {
+      return {
+        resolvedPath,
+        userPath: discoveredGlobalPath ?? resolvedPath,
+        workspacePath: discoveredWorkspacePath ?? resolvedPath,
+      };
+    }
+
+    return {
+      resolvedPath,
+      userPath: resolvedPath,
+      workspacePath: resolvedPath,
+    };
+  }
+
+  const workspacePath = discoveredWorkspacePath ?? resolvedPath;
+  const userPath = discoveredGlobalPath ?? workspacePath;
+  return { resolvedPath, userPath, workspacePath };
+}
+
+export function resolveCopilotDestinationPath(
+  workspaceDir: string,
+  scope: "user" | "workspace" | "session",
+  category: string | undefined,
+  targetPath?: string,
+): string {
+  const paths = resolveCopilotTargetPaths(workspaceDir, targetPath);
+  const fileName = `${
+    (category ?? "other")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "other"
+  }.md`;
+  if (scope === "user") return join(paths.userPath, fileName);
+  if (scope === "session")
+    return join(paths.workspacePath, "session", fileName);
+  return join(paths.workspacePath, "repo", fileName);
 }
 
 function mergeByStatement(
@@ -188,12 +249,10 @@ export class CopilotMemoryBackend implements MemoryBackend {
   private readonly target: CopilotTarget;
 
   constructor(workspaceDir: string, targetPath?: string) {
-    const resolvedPath = targetPath ?? defaultCopilotMemoryTarget(workspaceDir);
-    const discoveredWorkspacePath = discoverCopilotWorkspaceMemoryRoot(
+    const { resolvedPath, userPath, workspacePath } = resolveCopilotTargetPaths(
       workspaceDir,
-      false,
+      targetPath,
     );
-    const discoveredGlobalPath = discoverCopilotGlobalMemoryRoot(false);
     if (resolvedPath.endsWith(".json")) {
       this.target = { kind: "legacy-json-file", path: resolvedPath };
       return;
@@ -202,32 +261,6 @@ export class CopilotMemoryBackend implements MemoryBackend {
       this.target = { kind: "markdown-file", path: resolvedPath };
       return;
     }
-
-    if (targetPath) {
-      const usesOfficialCopilotRoot =
-        pathsMatch(resolvedPath, discoveredGlobalPath) ||
-        pathsMatch(resolvedPath, discoveredWorkspacePath);
-      if (usesOfficialCopilotRoot) {
-        this.target = {
-          kind: "memory-root",
-          path: resolvedPath,
-          userPath: discoveredGlobalPath ?? resolvedPath,
-          workspacePath: discoveredWorkspacePath ?? resolvedPath,
-        };
-        return;
-      }
-
-      this.target = {
-        kind: "memory-root",
-        path: resolvedPath,
-        userPath: resolvedPath,
-        workspacePath: resolvedPath,
-      };
-      return;
-    }
-
-    const workspacePath = discoveredWorkspacePath ?? resolvedPath;
-    const userPath = discoveredGlobalPath ?? workspacePath;
     this.target = {
       kind: "memory-root",
       path: resolvedPath,

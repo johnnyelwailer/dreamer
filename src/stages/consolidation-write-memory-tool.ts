@@ -1,15 +1,11 @@
 import { defineTool } from "@github/copilot-sdk";
 import { execFileSync } from "node:child_process";
-import { join } from "node:path";
+import { resolveCopilotDestinationPath } from "../backends/copilot-memory-backend.js";
 import {
   MEMORY_CATEGORIES,
   type InsightRecord,
   type MemoryRecord,
 } from "../core/types.js";
-import {
-  discoverCopilotGlobalMemoryRoot,
-  discoverCopilotWorkspaceMemoryRoot,
-} from "../dream/copilot-memory-path.js";
 import { workspaceId as resolveWorkspaceId } from "../dream/dreamer-home.js";
 import { inferEvidenceAndReferences } from "./consolidation-memory-metadata.js";
 import { validateReferencesStrict } from "./consolidation-reference-validation.js";
@@ -53,31 +49,19 @@ function readGitField(
   }
 }
 
-function toCategorySlug(category?: string): string {
-  const normalized = (category ?? "other")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return normalized.length > 0 ? normalized : "other";
-}
-
 function formatCopilotDestination(
   scope: "user" | "workspace",
   workspaceDir: string,
   category?: string,
 ): string {
-  const workspaceRoot = discoverCopilotWorkspaceMemoryRoot(workspaceDir, false);
-  const globalRoot = discoverCopilotGlobalMemoryRoot(false);
-  const fileName = `${toCategorySlug(category)}.md`;
-  if (scope === "user") {
-    const base = globalRoot ?? workspaceRoot;
-    if (!base) return "(unresolved: copilot memory root not found)";
-    return join(base, fileName);
-  }
-  if (!workspaceRoot)
-    return "(unresolved: workspace copilot memory root not found)";
-  return join(workspaceRoot, "repo", fileName);
+  const configuredTargetPath =
+    process.env.DREAM_COPILOT_MEMORY_FILE ?? undefined;
+  return resolveCopilotDestinationPath(
+    workspaceDir,
+    scope,
+    category,
+    configuredTargetPath,
+  );
 }
 
 export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
