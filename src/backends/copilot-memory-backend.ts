@@ -1,5 +1,5 @@
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import type { MemoryBackend } from "../core/contracts.js";
 import type { MemoryRecord } from "../core/types.js";
 import {
@@ -7,6 +7,7 @@ import {
   discoverCopilotGlobalMemoryRoot,
   discoverCopilotWorkspaceMemoryRoot,
 } from "../dream/copilot-memory-path.js";
+import { MEMORY_CATEGORIES, type MemoryCategory } from "../core/types.js";
 
 type CopilotMemoryDoc = {
   version: string;
@@ -26,9 +27,6 @@ type CopilotTarget =
 
 const MACHINE_BLOCK_START = "<!-- dreamer:records:start -->";
 const MACHINE_BLOCK_END = "<!-- dreamer:records:end -->";
-const USER_MEMORY_FILE = "dreamer-memory.md";
-const REPO_MEMORY_FILE = "dreamer-repo-memory.md";
-const SESSION_MEMORY_FILE = "dreamer-session-memory.md";
 
 function recordsForScope(
   records: MemoryRecord[],
@@ -37,6 +35,54 @@ function recordsForScope(
   if (scope === "repo")
     return records.filter((record) => record.scope === "workspace");
   return records.filter((record) => record.scope === scope);
+}
+
+function bulletMarkdown(records: MemoryRecord[]): string {
+  const lines = records
+    .map((record) => `- ${record.statement}`)
+    .filter((line) => line.trim().length > 2);
+  return `${lines.join("\n")}${lines.length ? "\n" : ""}`;
+}
+
+function categorySlug(record: MemoryRecord): string {
+  const raw = record.context?.category ?? "other";
+  const slug = raw.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : "other";
+}
+
+function inferCategoryFromPath(path: string): string | undefined {
+  const name = basename(path).replace(/\.md$/i, "");
+  if (!name || name.startsWith("dreamer-")) return undefined;
+  return name;
+}
+
+function normalizeCategoryValue(value?: string): MemoryCategory | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  return MEMORY_CATEGORIES.includes(normalized as (typeof MEMORY_CATEGORIES)[number])
+    ? (normalized as (typeof MEMORY_CATEGORIES)[number])
+    : undefined;
+}
+
+function normalizeComparablePath(value?: string): string | undefined {
+  if (!value) return undefined;
+  const normalized = value.replace(/[\\/]+/g, "/");
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function pathsMatch(left?: string, right?: string): boolean {
+  return Boolean(left && right && normalizeComparablePath(left) === normalizeComparablePath(right));
+}
+
+function mergeByStatement(existing: MemoryRecord[], incoming: MemoryRecord[]): MemoryRecord[] {
+  const merged = new Map<string, MemoryRecord>();
+  for (const record of existing) {
+    merged.set(record.statement.trim().toLowerCase(), record);
+  }
+  for (const record of incoming) {
+    merged.set(record.statement.trim().toLowerCase(), record);
+  }
+  return [...merged.values()];
 }
 
 function renderMarkdown(records: MemoryRecord[]): string {
@@ -130,6 +176,8 @@ export class CopilotMemoryBackend implements MemoryBackend {
 
   constructor(workspaceDir: string, targetPath?: string) {
     const resolvedPath = targetPath ?? defaultCopilotMemoryTarget(workspaceDir);
+    const discoveredWorkspacePath = discoverCopilotWorkspaceMemoryRoot(workspaceDir, false);
+    const discoveredGlobalPath = discoverCopilotGlobalMemoryRoot(false);
     if (resolvedPath.endsWith(".json")) {
       this.target = { kind: "legacy-json-file", path: resolvedPath };
       return;
@@ -140,6 +188,19 @@ export class CopilotMemoryBackend implements MemoryBackend {
     }
 
     if (targetPath) {
+      const usesOfficialCopilotRoot =
+        pathsMatch(resolvedPath, discoveredGlobalPath) ||
+        pathsMatch(resolvedPath, discoveredWorkspacePath);
+      if (usesOfficialCopilotRoot) {
+        this.target = {
+          kind: "memory-root",
+          path: resolvedPath,
+          userPath: discoveredGlobalPath ?? resolvedPath,
+          workspacePath: discoveredWorkspacePath ?? resolvedPath,
+        };
+        return;
+      }
+
       this.target = {
         kind: "memory-root",
         path: resolvedPath,
@@ -149,9 +210,8 @@ export class CopilotMemoryBackend implements MemoryBackend {
       return;
     }
 
-    const workspacePath =
-      discoverCopilotWorkspaceMemoryRoot(workspaceDir, false) ?? resolvedPath;
-    const userPath = discoverCopilotGlobalMemoryRoot(false) ?? workspacePath;
+    const workspacePath = discoveredWorkspacePath ?? resolvedPath;
+    const userPath = discoveredGlobalPath ?? workspacePath;
     this.target = {
       kind: "memory-root",
       path: resolvedPath,
@@ -196,42 +256,7 @@ export class CopilotMemoryBackend implements MemoryBackend {
       }
     }
 
-    const files: Array<{ path: string; scope: MemoryRecord["scope"] }> = [
-      { path: join(this.target.userPath, USER_MEMORY_FILE), scope: "user" },
-      {
-        path: join(this.target.workspacePath, "repo", REPO_MEMORY_FILE),
-        scope: "workspace",
-      },
-      {
-        path: join(this.target.workspacePath, "session", SESSION_MEMORY_FILE),
-        scope: "session",
-      },
-    ];
-
     const loaded: MemoryRecord[] = [];
-    for (const file of files) {
-      try {
-        const raw = await readFile(file.path, "utf8");
-        const fromMachineBlock = parseMachineBlock(raw);
-        if (fromMachineBlock.length > 0) {
-          loaded.push(
-            ...fromMachineBlock.map((record) => ({
-              ...record,
-              scope: file.scope,
-            })),
-          );
-          continue;
-        }
-        loaded.push(
-          ...parseBulletStatements(raw, file.scope, "copilot-memory-markdown"),
-        );
-      } catch {
-        continue;
-      }
-    }
-    if (loaded.length > 0) return loaded;
-
-    // Fall back to common memory scope folders without recursive tree walking.
     const fallbackDirs = [
       this.target.path,
       this.target.userPath,
@@ -252,23 +277,29 @@ export class CopilotMemoryBackend implements MemoryBackend {
         try {
           const raw = await readFile(fullPath, "utf8");
           const inferredScope = scopeFromPath(fullPath);
+          const inferredCategory = normalizeCategoryValue(inferCategoryFromPath(fullPath));
           const fromMachineBlock = parseMachineBlock(raw);
           if (fromMachineBlock.length > 0) {
             loaded.push(
               ...fromMachineBlock.map((record) => ({
                 ...record,
                 scope: inferredScope,
+                context: {
+                  ...record.context,
+                  category: record.context?.category ?? inferredCategory,
+                },
               })),
             );
             continue;
           }
-          loaded.push(
-            ...parseBulletStatements(
-              raw,
-              inferredScope,
-              "copilot-memory-markdown",
-            ),
-          );
+          const parsed = parseBulletStatements(raw, inferredScope, "copilot-memory-markdown").map((record) => ({
+            ...record,
+            context: {
+              ...record.context,
+              category: inferredCategory,
+            },
+          }));
+          loaded.push(...parsed);
         } catch {
           continue;
         }
@@ -303,29 +334,52 @@ export class CopilotMemoryBackend implements MemoryBackend {
       return;
     }
 
-    const scopedFiles = [
-      {
-        scope: "user" as const,
-        path: join(this.target.userPath, USER_MEMORY_FILE),
-      },
-      {
-        scope: "repo" as const,
-        path: join(this.target.workspacePath, "repo", REPO_MEMORY_FILE),
-      },
-      {
-        scope: "session" as const,
-        path: join(this.target.workspacePath, "session", SESSION_MEMORY_FILE),
-      },
-    ];
+    const targets = new Map<string, MemoryRecord[]>();
+    for (const record of records) {
+      const scopeRoot =
+        record.scope === "user"
+          ? this.target.userPath
+          : record.scope === "session"
+            ? join(this.target.workspacePath, "session")
+            : join(this.target.workspacePath, "repo");
+      const destination = join(scopeRoot, `${categorySlug(record)}.md`);
+      const current = targets.get(destination) ?? [];
+      current.push(record);
+      targets.set(destination, current);
+    }
 
-    for (const file of scopedFiles) {
-      const next = recordsForScope(records, file.scope);
-      if (next.length === 0) {
-        await rm(file.path, { force: true }).catch(() => undefined);
-        continue;
+    for (const [path, incoming] of targets.entries()) {
+      let existing: MemoryRecord[] = [];
+      try {
+        const raw = await readFile(path, "utf8");
+        const scope = scopeFromPath(path);
+        const category = normalizeCategoryValue(inferCategoryFromPath(path));
+        const machine = parseMachineBlock(raw);
+        if (machine.length > 0) {
+          existing = machine.map((record) => ({
+            ...record,
+            scope,
+            context: {
+              ...record.context,
+              category: record.context?.category ?? category,
+            },
+          }));
+        } else {
+          existing = parseBulletStatements(raw, scope, "copilot-memory-markdown").map((record) => ({
+            ...record,
+            context: {
+              ...record.context,
+              category,
+            },
+          }));
+        }
+      } catch {
+        existing = [];
       }
-      await mkdir(dirname(file.path), { recursive: true });
-      await writeFile(file.path, renderMarkdown(next), "utf8");
+
+      const merged = mergeByStatement(existing, incoming);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, bulletMarkdown(merged), "utf8");
     }
   }
 }

@@ -1,6 +1,11 @@
 import { defineTool } from "@github/copilot-sdk";
 import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 import { MEMORY_CATEGORIES, type InsightRecord, type MemoryRecord } from "../core/types.js";
+import {
+  discoverCopilotGlobalMemoryRoot,
+  discoverCopilotWorkspaceMemoryRoot
+} from "../dream/copilot-memory-path.js";
 import { workspaceId as resolveWorkspaceId } from "../dream/dreamer-home.js";
 import { EVIDENCE_ITEM_SCHEMA, REFERENCE_ITEM_SCHEMA, normalizeEvidence, normalizeReferences, normalizeTags, parseCategory, parseHorizon } from "./memory-tool-shared.js";
 import { inferEvidenceAndReferences } from "./consolidation-memory-metadata.js";
@@ -31,6 +36,28 @@ function readGitField(workspaceDir: string, args: string[]): string | undefined 
   } catch {
     return undefined;
   }
+}
+
+function toCategorySlug(category?: string): string {
+  const normalized = (category ?? "other")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized.length > 0 ? normalized : "other";
+}
+
+function formatCopilotDestination(scope: "user" | "workspace", workspaceDir: string, category?: string): string {
+  const workspaceRoot = discoverCopilotWorkspaceMemoryRoot(workspaceDir, false);
+  const globalRoot = discoverCopilotGlobalMemoryRoot(false);
+  const fileName = `${toCategorySlug(category)}.md`;
+  if (scope === "user") {
+    const base = globalRoot ?? workspaceRoot;
+    if (!base) return "(unresolved: copilot memory root not found)";
+    return join(base, fileName);
+  }
+  if (!workspaceRoot) return "(unresolved: workspace copilot memory root not found)";
+  return join(workspaceRoot, "repo", fileName);
 }
 
 export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
@@ -123,7 +150,11 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
           repoCommit
         };
         options.onUpdated();
-        return { textResultForLlm: "Memory reinforced.", resultType: "success" as const };
+        const destination = formatCopilotDestination(scope, options.workspaceDir, category ?? undefined);
+        return {
+          textResultForLlm: `Memory reinforced.\n\nCopilot destination:\n[${destination}](${destination})`,
+          resultType: "success" as const
+        };
       }
 
       const record: MemoryRecord = {
@@ -155,7 +186,11 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
       };
       options.memories.push(record);
       options.onAdded(record);
-      return { textResultForLlm: "Memory written.", resultType: "success" as const };
+      const destination = formatCopilotDestination(scope, options.workspaceDir, category ?? undefined);
+      return {
+        textResultForLlm: `Memory written.\n\nCopilot destination:\n[${destination}](${destination})`,
+        resultType: "success" as const
+      };
     }
   });
 }
