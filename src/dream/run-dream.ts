@@ -34,6 +34,12 @@ import type { RuntimeStageAgentPackConfig } from "./runtime-manifest.js";
 
 export type { RunDreamOptions } from "./run-dream-types.js";
 
+function isTruthyEnv(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 type SignalStageFactory = new (
   provider: IntelligenceProvider,
   agentPack?: RuntimeStageAgentPackConfig,
@@ -153,7 +159,9 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
   const backend = registry.requireBackend(config.backendId);
   const provider = registry.requireProvider(config.providerId);
   const state = new JsonStateStore(JsonStateStore.runStatePath(workspaceDir));
-  const effectiveSessionWorkspaceMode = options.sessionWorkspaceMode ?? config.copilotDebugSessionWorkspaceMode;
+  const requestedSessionWorkspaceMode = options.sessionWorkspaceMode ?? config.copilotDebugSessionWorkspaceMode;
+  const enforceWorkspaceDefault = isTruthyEnv(process.env.DREAM_SAFE_LOCK_WORKING_DIRECTORY);
+  const effectiveSessionWorkspaceMode = enforceWorkspaceDefault ? "workspace-default" : requestedSessionWorkspaceMode;
   const SignalStageCtor = SignalStage as unknown as SignalStageFactory;
   const signalStage = new SignalStageCtor(
     provider,
@@ -198,6 +206,11 @@ export async function runDream(workspaceDir: string, options: RunDreamOptions = 
     const effectiveSessionScopeMode = options.sessionScopeMode ?? config.copilotDebugSessionScopeMode;
     const effectiveSinceDays = options.sinceDays ?? config.copilotDebugLookbackDays;
     const effectivePersistState = options.persistState !== false;
+    if (enforceWorkspaceDefault && requestedSessionWorkspaceMode !== "workspace-default") {
+      context.diary.push(
+        `config:sessionWorkspaceLock=workspace-default (requested=${requestedSessionWorkspaceMode})`
+      );
+    }
     status.update(
       `config maxSessions=${formatLimit(configuredMaxSessions)} batchSessions=${formatLimit(configuredBatchSessions)} ` +
         `sinceDays=${effectiveSinceDays} sessionScope=${effectiveSessionScopeMode} sessionWorkspace=${effectiveSessionWorkspaceMode} minSessions=${config.minSessions} ` +

@@ -147,6 +147,8 @@ function main(): void {
       DREAMER_ENV_SOURCE_DIR: process.env.DREAMER_ENV_SOURCE_DIR ?? workspaceDir,
       DREAMER_WORKSPACE_DIR: worktreeDir,
       DREAMER_SAFE_WORKTREE: worktreeDir,
+      DREAM_SAFE_LOCK_WORKING_DIRECTORY: "1",
+      DREAM_COPILOT_SESSION_WORKSPACE_MODE: "workspace-default",
     },
   });
 
@@ -155,6 +157,7 @@ function main(): void {
   ttyWriteLine(`Branch: ${branch}`);
   ttyWriteLine(`Worktree: ${worktreeDir}`);
   ttyWriteLine(`Command: ${options.command}`);
+  ttyWriteLine("Session workspace mode: workspace-default (safe lock)");
 
   if (!options.keepWorktree) {
     run("git", ["worktree", "remove", worktreeDir, "--force"], workspaceDir);
