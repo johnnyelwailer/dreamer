@@ -42,6 +42,7 @@ export type AgentToolGuard = {
 
 type GuardOptions = {
   allowedTaskAgentTypes?: Iterable<string>;
+  defaultAgentAllowedTools?: Iterable<string>;
   defaultAgentExcludedTools?: Iterable<string>;
   initialAgent?: string;
   maxParallelSubagents?: number;

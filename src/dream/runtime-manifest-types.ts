@@ -44,7 +44,8 @@ type RuntimePipelineConfig = {
 };
 
 export type RuntimeDefaultAgentConfig = {
-  excludedTools: string[];
+  excludedTools?: string[];
+  allowedTools?: string[];
 };
 
 export type RuntimeCustomAgentConfig = {

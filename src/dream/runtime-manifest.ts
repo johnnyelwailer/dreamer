@@ -69,8 +69,20 @@ function mergeBundledAgentPacks(parsed: unknown, mergeDefaults: boolean): unknow
     if (!bundled || !local) continue;
     const bundledDefault = asRecord(bundled.defaultAgent);
     const localDefault = asRecord(local.defaultAgent);
+    const allowedTools = mergeToolLists(bundledDefault?.allowedTools, localDefault?.allowedTools);
     const excludedTools = mergeToolLists(bundledDefault?.excludedTools, localDefault?.excludedTools);
-    agentPacks[stageId] = excludedTools ? { ...local, defaultAgent: { ...localDefault, excludedTools } } : local;
+    if (!allowedTools && !excludedTools) {
+      agentPacks[stageId] = local;
+      continue;
+    }
+    agentPacks[stageId] = {
+      ...local,
+      defaultAgent: {
+        ...localDefault,
+        ...(allowedTools ? { allowedTools } : {}),
+        ...(excludedTools ? { excludedTools } : {})
+      }
+    };
   }
 
   return {

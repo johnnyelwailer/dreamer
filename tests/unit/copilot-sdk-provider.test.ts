@@ -114,7 +114,31 @@ describe("CopilotSdkProvider.runAgent", () => {
     );
 
     const args = mockState.createSessionArgs[0] ?? {};
-    expect(args.defaultAgent).toEqual({ excludedTools: ["record_insight", "bash"] });
+    expect(args.defaultAgent).toEqual({ excludedTools: ["record_insight", "bash", "grep_search"] });
+  });
+
+  it("derives SDK excludedTools from default-agent allowedTools", async () => {
+    const provider = new CopilotSdkProvider({
+      model: "gpt-5",
+      requestTimeoutMs: 1000,
+      clientOptions: { useLoggedInUser: false },
+      sessionConfig: {
+        workingDirectory: process.cwd()
+      }
+    });
+
+    await provider.runAgent(
+      "analyze",
+      [{ name: "record_insight" }, { name: "finalize_signal_extraction" }],
+      {
+        defaultAgent: {
+          allowedTools: ["task", "record_insight"]
+        }
+      }
+    );
+
+    const args = mockState.createSessionArgs[0] ?? {};
+    expect(args.defaultAgent).toEqual({ excludedTools: ["finalize_signal_extraction", "bash", "create", "edit", "glob", "grep", "file_search", "grep_search", "semantic_search", "list_dir", "read_file", "list_agents", "list_bash", "read_agent", "read_bash", "manage_todo_list", "get_errors", "report_intent", "skill", "delegate", "view", "web_fetch", "write_bash"] });
   });
 
   it("only sends retry prompts when shouldRetry returns true", async () => {
@@ -351,6 +375,51 @@ describe("CopilotSdkProvider.runAgent", () => {
       hooks.onPreToolUse({
         toolName: "bash",
         toolArgs: { command: "wc -l session-2.md" }
+      })
+    ).toBeUndefined();
+  });
+
+  it("allows non-allowlisted tools while a configured subagent is active", async () => {
+    const provider = new CopilotSdkProvider({
+      model: "gpt-5",
+      requestTimeoutMs: 1000,
+      clientOptions: { useLoggedInUser: false },
+      sessionConfig: {
+        workingDirectory: process.cwd()
+      }
+    });
+
+    await provider.runAgent("analyze", [], {
+      defaultAgent: { allowedTools: ["task", "finalize_signal_extraction"] },
+      customAgents: [
+        {
+          name: "timeline-analyst",
+          tools: ["read_file"],
+          prompt: "Inspect timeline.",
+          infer: true
+        }
+      ]
+    });
+
+    const args = mockState.createSessionArgs[0] ?? {};
+    const hooks = args.hooks as {
+      onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => unknown;
+    };
+    const onEvent = args.onEvent as (event: unknown) => void;
+
+    expect(
+      hooks.onPreToolUse({
+        toolName: "read_file",
+        toolArgs: { path: "session-2.md" }
+      })
+    ).toMatchObject({ permissionDecision: "deny" });
+
+    onEvent({ type: "subagent.started", agentId: "timeline-2", data: { agentName: "timeline-analyst" } });
+
+    expect(
+      hooks.onPreToolUse({
+        toolName: "read_file",
+        toolArgs: { path: "session-2.md" }
       })
     ).toBeUndefined();
   });

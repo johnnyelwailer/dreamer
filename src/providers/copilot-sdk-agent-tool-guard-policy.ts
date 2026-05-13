@@ -3,13 +3,19 @@ import { describeTaskArgs } from "./copilot-sdk-task-args.js";
 import { normalizeValue } from "./copilot-sdk-agent-tool-guard-helpers.js";
 
 type SubagentState = { activeCount: () => number; isActive: () => boolean; describe: () => string };
-type GuardOptions = { allowedTaskAgentTypes?: Iterable<string>; defaultAgentExcludedTools?: Iterable<string>; maxParallelSubagents?: number };
+type GuardOptions = {
+  allowedTaskAgentTypes?: Iterable<string>;
+  defaultAgentAllowedTools?: Iterable<string>;
+  defaultAgentExcludedTools?: Iterable<string>;
+  maxParallelSubagents?: number;
+};
 
 const ALLOWED_BUILTIN_TASK_AGENTS = ["explore"];
 
 export function createGuardPolicy(options: GuardOptions, subagents: SubagentState) {
   const configuredAgents = [...(options.allowedTaskAgentTypes ?? [])].map(normalizeValue).filter(Boolean);
   const allowedAgents = new Set(configuredAgents.length > 0 ? [...ALLOWED_BUILTIN_TASK_AGENTS.map(normalizeValue), ...configuredAgents] : []);
+  const allowedDefaultTools = new Set([...(options.defaultAgentAllowedTools ?? [])].map(normalizeValue).filter(Boolean));
   const blockedDefaultTools = new Set([...(options.defaultAgentExcludedTools ?? [])].map(normalizeValue).filter(Boolean));
   const maxParallelSubagents =
     typeof options.maxParallelSubagents === "number" && Number.isInteger(options.maxParallelSubagents) && options.maxParallelSubagents > 0
@@ -34,8 +40,18 @@ export function createGuardPolicy(options: GuardOptions, subagents: SubagentStat
   };
 
   const denyDefaultTool = (toolName: string | undefined) => {
-    if (!toolName || subagents.isActive() || !blockedDefaultTools.has(normalizeValue(toolName))) return undefined;
-    return { permissionDecision: "deny" as const, permissionDecisionReason: `The default stage agent cannot call ${toolName} directly.`, additionalContext: `Delegate evidence inspection to a configured specialist subagent. Active subagents: ${subagents.describe()}.` };
+    if (!toolName || subagents.isActive()) return undefined;
+    const normalizedToolName = normalizeValue(toolName);
+    const allowlistEnabled = allowedDefaultTools.size > 0;
+    const deniedByAllowlist = allowlistEnabled && !allowedDefaultTools.has(normalizedToolName);
+    const deniedByExclusion = blockedDefaultTools.has(normalizedToolName);
+    if (!deniedByAllowlist && !deniedByExclusion) return undefined;
+    return {
+      permissionDecision: "deny" as const,
+      permissionDecisionReason: `The default stage agent cannot call ${toolName} directly.`,
+      additionalContext:
+        `Use task delegation with agent_type=\"explore\" when file evidence is needed, or delegate to a configured specialist. Active subagents: ${subagents.describe()}.`
+    };
   };
 
   const reserveLaunchSlot = (toolName: string): Promise<void> | undefined => {

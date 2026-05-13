@@ -41,6 +41,7 @@ export type MemoryBackend = {
 
 export type RunAgentDefaultAgentConfig = {
   excludedTools?: string[];
+  allowedTools?: string[];
 };
 
 export type RunAgentCustomAgentConfig = {

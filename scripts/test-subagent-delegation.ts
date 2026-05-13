@@ -67,6 +67,28 @@ const betaReader = {
 
 const allowedTaskAgents = new Set([alphaReader.name, betaReader.name]);
 
+function normalizeTaskArgs(raw: unknown): Record<string, unknown> {
+  if (typeof raw === "string") {
+    try {
+      return normalizeTaskArgs(JSON.parse(raw) as unknown);
+    } catch {
+      return {};
+    }
+  }
+  if (!raw || typeof raw !== "object") return {};
+  const direct = raw as Record<string, unknown>;
+  if (direct.input && typeof direct.input === "object" && !Array.isArray(direct.input)) {
+    return direct.input as Record<string, unknown>;
+  }
+  return direct;
+}
+
+function readTaskAgentType(raw: unknown): string {
+  const args = normalizeTaskArgs(raw);
+  const preferred = args.agent_type ?? args.agentType;
+  return typeof preferred === "string" ? preferred : "";
+}
+
 const inspectProbe = defineTool("inspect_probe", {
   description: "Subagent-only inspection tool. Use this to inspect probe facts by key.",
   parameters: {
@@ -178,8 +200,7 @@ try {
     hooks: {
       onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => {
         if (input.toolName !== "task") return undefined;
-        const args = input.toolArgs as Record<string, unknown> | undefined;
-        const agentType = typeof args?.agent_type === "string" ? args.agent_type : "";
+        const agentType = readTaskAgentType(input.toolArgs);
         if (allowedTaskAgents.has(agentType)) return undefined;
         return {
           permissionDecision: "deny" as const,

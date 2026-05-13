@@ -7,19 +7,65 @@ import { buildToolCallId } from "./copilot-sdk-stream-format.js";
 import { buildProviderSessionConfig } from "./copilot-sdk-provider-session-config.js";
 import { COPILOT_SDK_PROVIDER_REQUEST_FAILED, extractAssistantText } from "./copilot-sdk-text.js";
 
-function sanitizeDefaultAgentExcludedTools(excludedTools: Iterable<string> | undefined, tools: unknown[]): string[] | undefined {
-  if (!excludedTools) return undefined;
+const KNOWN_BUILTIN_TOOL_NAMES = [
+  "bash",
+  "create",
+  "edit",
+  "glob",
+  "grep",
+  "file_search",
+  "grep_search",
+  "semantic_search",
+  "list_dir",
+  "read_file",
+  "list_agents",
+  "list_bash",
+  "read_agent",
+  "read_bash",
+  "manage_todo_list",
+  "get_errors",
+  "report_intent",
+  "skill",
+  "task",
+  "delegate",
+  "view",
+  "web_fetch",
+  "write_bash"
+] as const;
+
+function collectKnownToolNames(tools: unknown[]): Set<string> {
   const knownToolNames = new Set(
     tools
       .map((tool) => (tool as { name?: unknown }).name)
       .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
       .map((name) => name.trim())
   );
-  const filtered = [...excludedTools].filter((toolName) => {
+  for (const builtinName of KNOWN_BUILTIN_TOOL_NAMES) knownToolNames.add(builtinName);
+  return knownToolNames;
+}
+
+function sanitizeToolList(toolNames: Iterable<string> | undefined, knownToolNames: Set<string>): string[] | undefined {
+  if (!toolNames) return undefined;
+  const filtered = [...toolNames].filter((toolName) => {
     const normalized = toolName.trim();
-    return normalized.length > 0 && (knownToolNames.has(normalized) || normalized === "bash" || normalized === "create" || normalized === "edit" || normalized === "glob" || normalized === "grep" || normalized === "list_agents" || normalized === "list_bash" || normalized === "read_agent" || normalized === "read_bash" || normalized === "report_intent" || normalized === "skill" || normalized === "task" || normalized === "view" || normalized === "web_fetch" || normalized === "write_bash");
+    return normalized.length > 0 && knownToolNames.has(normalized);
   });
   return filtered.length > 0 ? filtered : undefined;
+}
+
+function resolveDefaultAgentExcludedTools(
+  defaultAgent: RunAgentOptions["defaultAgent"],
+  knownToolNames: Set<string>
+): string[] | undefined {
+  const sanitizedExcluded = sanitizeToolList(defaultAgent?.excludedTools, knownToolNames);
+  const sanitizedAllowed = sanitizeToolList(defaultAgent?.allowedTools, knownToolNames);
+  if (sanitizedAllowed && sanitizedAllowed.length > 0) {
+    const allowedSet = new Set(sanitizedAllowed);
+    const derivedExcluded = [...knownToolNames].filter((toolName) => !allowedSet.has(toolName));
+    const merged = [...new Set([...(sanitizedExcluded ?? []), ...derivedExcluded])];
+    return merged;
+  }
+  return sanitizedExcluded;
 }
 
 function createSessionActivityTracker() {
@@ -74,10 +120,13 @@ export async function runCopilotSdkAgent(options: CopilotSdkProviderOptions, pro
   const client = new CopilotClient(options.clientOptions);
   const onStreamEvent = createDreamAgentStreamHandler({ agentTag: runOptions.selectedAgent ?? runOptions.streamTag ?? "dream agent" });
   const activityTracker = createSessionActivityTracker();
-  const sanitizedDefaultAgentExcludedTools = sanitizeDefaultAgentExcludedTools(runOptions.defaultAgent?.excludedTools, tools);
+  const knownToolNames = collectKnownToolNames(tools);
+  const sanitizedDefaultAgentAllowedTools = sanitizeToolList(runOptions.defaultAgent?.allowedTools, knownToolNames);
+  const sanitizedDefaultAgentExcludedTools = resolveDefaultAgentExcludedTools(runOptions.defaultAgent, knownToolNames);
   const guard = createAgentToolGuard({
     allowedTaskAgentTypes: runOptions.customAgents?.map((agent) => agent.name),
-    defaultAgentExcludedTools: runOptions.defaultAgent?.excludedTools,
+    defaultAgentAllowedTools: sanitizedDefaultAgentAllowedTools,
+    defaultAgentExcludedTools: sanitizedDefaultAgentExcludedTools,
     initialAgent: runOptions.selectedAgent,
     maxParallelSubagents: runOptions.maxSubagentParallelism ?? options.maxSubagentParallelism
   });
@@ -92,9 +141,9 @@ export async function runCopilotSdkAgent(options: CopilotSdkProviderOptions, pro
       ...(customAgents ? { customAgents } : {}),
       ...(runOptions.defaultAgent
         ? {
-            defaultAgent: sanitizedDefaultAgentExcludedTools
-              ? { ...runOptions.defaultAgent, excludedTools: sanitizedDefaultAgentExcludedTools }
-              : { ...runOptions.defaultAgent, excludedTools: [] }
+            defaultAgent: {
+              excludedTools: sanitizedDefaultAgentExcludedTools ?? []
+            }
           }
         : {}),
       ...(runOptions.selectedAgent ? { agent: runOptions.selectedAgent } : {}),

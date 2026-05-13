@@ -6,7 +6,12 @@ import { normalizeValue, permissionToolName, readStringField } from "./copilot-s
 import { createGuardPolicy } from "./copilot-sdk-agent-tool-guard-policy.js";
 
 type ToolHookInput = { toolName: string; toolArgs: unknown; toolResult?: ToolResultObject };
-type GuardOptions = { allowedTaskAgentTypes?: Iterable<string>; defaultAgentExcludedTools?: Iterable<string>; maxParallelSubagents?: number };
+type GuardOptions = {
+  allowedTaskAgentTypes?: Iterable<string>;
+  defaultAgentAllowedTools?: Iterable<string>;
+  defaultAgentExcludedTools?: Iterable<string>;
+  maxParallelSubagents?: number;
+};
 type SubagentState = { activeCount: () => number; isActive: () => boolean; describe: () => string };
 
 export function createAgentToolGuardHooks(options: GuardOptions, subagents: SubagentState, activeShellIds: Set<string>) {
@@ -51,7 +56,11 @@ export function createAgentToolGuardHooks(options: GuardOptions, subagents: Suba
     onPermissionRequest: (request: PermissionRequest, invocation: { sessionId: string }): Promise<PermissionRequestResult> | PermissionRequestResult => {
       const toolName = permissionToolName(request);
       const denied = policy.denyDefaultTool(toolName);
-      if (denied) return { kind: "reject", feedback: denied.permissionDecisionReason };
+      if (denied) {
+        const reason = denied.permissionDecisionReason ?? "Tool call denied by stage policy.";
+        const context = denied.additionalContext ? ` ${denied.additionalContext}` : "";
+        return { kind: "reject", feedback: `${reason}${context}` };
+      }
       return approveAll(request, invocation);
     }
   };

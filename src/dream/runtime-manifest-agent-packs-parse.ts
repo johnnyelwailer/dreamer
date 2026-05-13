@@ -31,7 +31,7 @@ export function parseAgentPacks(
 ): Record<
   string,
   {
-    defaultAgent?: { excludedTools: string[] };
+    defaultAgent?: { excludedTools?: string[]; allowedTools?: string[] };
     customAgents: Array<{
       name: string;
       displayName?: string;
@@ -47,7 +47,7 @@ export function parseAgentPacks(
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`Invalid runtime manifest field: ${field}`);
 
   const parsed: Record<string, {
-    defaultAgent?: { excludedTools: string[] };
+    defaultAgent?: { excludedTools?: string[]; allowedTools?: string[] };
     customAgents: Array<{
       name: string;
       displayName?: string;
@@ -90,9 +90,21 @@ export function parseAgentPacks(
           ? (() => {
               throw new Error(`Invalid runtime manifest field: ${packField}.defaultAgent`);
             })()
-          : {
-              excludedTools: asStringArray((pack.defaultAgent as Record<string, unknown>).excludedTools, `${packField}.defaultAgent.excludedTools`)
-            };
+          : (() => {
+              const rawDefaultAgent = pack.defaultAgent as Record<string, unknown>;
+              const excludedTools =
+                rawDefaultAgent.excludedTools === undefined
+                  ? undefined
+                  : asStringArray(rawDefaultAgent.excludedTools, `${packField}.defaultAgent.excludedTools`);
+              const allowedTools =
+                rawDefaultAgent.allowedTools === undefined
+                  ? undefined
+                  : asStringArray(rawDefaultAgent.allowedTools, `${packField}.defaultAgent.allowedTools`);
+              if (!excludedTools && !allowedTools) {
+                throw new Error(`Invalid runtime manifest field: ${packField}.defaultAgent`);
+              }
+              return { excludedTools, allowedTools };
+            })();
 
     const execution =
       pack.execution === undefined

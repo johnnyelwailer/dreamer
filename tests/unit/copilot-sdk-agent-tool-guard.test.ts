@@ -78,6 +78,68 @@ describe("createAgentToolGuard maxParallelSubagents", () => {
         permissionDecision: "deny"
       })
     );
+    expect(result).toEqual(
+      expect.objectContaining({
+        additionalContext: expect.stringContaining('agent_type="explore"')
+      })
+    );
+  });
+
+  it("denies tools that are not in the default-agent allowlist", async () => {
+    const guard = createAgentToolGuard({
+      defaultAgentAllowedTools: ["task", "finalize_consolidation"]
+    });
+
+    const denied = await Promise.resolve(
+      guard.hooks.onPreToolUse({
+        toolName: "list_memories",
+        toolArgs: {}
+      })
+    );
+
+    const allowed = await Promise.resolve(
+      guard.hooks.onPreToolUse({
+        toolName: "task",
+        toolArgs: { agent_type: "explore", prompt: "Inspect evidence." }
+      })
+    );
+
+    expect(denied).toEqual(
+      expect.objectContaining({
+        permissionDecision: "deny"
+      })
+    );
+    expect(allowed).toBeUndefined();
+  });
+
+  it("allows non-allowlisted tools while a subagent is active", async () => {
+    const guard = createAgentToolGuard({
+      allowedTaskAgentTypes: ["behavior-analyst"],
+      defaultAgentAllowedTools: ["task", "finalize_signal_extraction"]
+    });
+
+    const deniedBeforeSubagent = await Promise.resolve(
+      guard.hooks.onPreToolUse({
+        toolName: "read_file",
+        toolArgs: { path: "session-1.md" }
+      })
+    );
+
+    guard.onEvent({ type: "subagent.started", agentId: "behavior-1", data: { agentName: "behavior-analyst" } });
+
+    const allowedDuringSubagent = await Promise.resolve(
+      guard.hooks.onPreToolUse({
+        toolName: "read_file",
+        toolArgs: { path: "session-1.md" }
+      })
+    );
+
+    expect(deniedBeforeSubagent).toEqual(
+      expect.objectContaining({
+        permissionDecision: "deny"
+      })
+    );
+    expect(allowedDuringSubagent).toBeUndefined();
   });
 
   it("allows excluded tools for an explicitly selected specialist agent", async () => {
