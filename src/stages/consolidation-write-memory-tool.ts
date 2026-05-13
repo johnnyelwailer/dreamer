@@ -1,5 +1,7 @@
 import { defineTool } from "@github/copilot-sdk";
 import { execFileSync } from "node:child_process";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { resolveCopilotDestinationPath } from "../backends/copilot-memory-backend.js";
 import {
   MEMORY_CATEGORIES,
@@ -73,6 +75,21 @@ function formatCopilotDestination(
     category,
     configuredTargetPath,
   );
+}
+
+function writeUnresolvedWorkspaceFallback(
+  runDir: string,
+  entry: Record<string, unknown>,
+): string {
+  const fallbackDir = join(runDir, "fallback", "workspace-attribution");
+  mkdirSync(fallbackDir, { recursive: true });
+  const filePath = join(fallbackDir, "pending-workspace-writes.ndjson");
+  appendFileSync(filePath, `${JSON.stringify(entry)}\n`, "utf8");
+  return filePath;
+}
+
+function countDistinctSessionIds(sessionIds: string[]): number {
+  return new Set(sessionIds.map((sessionId) => sessionId.trim())).size;
 }
 
 export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
@@ -210,14 +227,45 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
         options.sessionSourceWorkspaceById,
         derived.sessionIds,
       );
+      if (options.forcedScope === "workspace") {
+        const missingSessionEvidence = derived.sessionIds.length === 0;
+        const unresolvedSessionIds = scopeDecision.unresolvedSessionIds;
+        if (
+          missingSessionEvidence ||
+          unresolvedSessionIds.length > 0 ||
+          !inferredWorkspaceDir
+        ) {
+          const fallbackFile = writeUnresolvedWorkspaceFallback(
+            options.runDir,
+            {
+              runId: options.runId,
+              timestamp: options.nowIso,
+              statement,
+              reason,
+              sessionIds: derived.sessionIds,
+              unresolvedSessionIds,
+              references: mergedReferences,
+              evidence,
+            },
+          );
+          return {
+            textResultForLlm:
+              `Workspace write deferred: unresolved workspace attribution. Not auto-upgraded to global. Saved for later review at ${fallbackFile}.`,
+            resultType: "success" as const,
+          };
+        }
+      }
       const attributionWorkspaceDir =
-        inferredWorkspaceDir ?? options.executionRootDir;
+        scope === "workspace"
+          ? inferredWorkspaceDir ?? options.executionRootDir
+          : options.executionRootDir;
       const attributionWorkspaceId = resolveWorkspaceId(
         attributionWorkspaceDir,
       );
       const { repoRemoteUrl, repoBranch, repoCommit } = readRepoMetadata(
         attributionWorkspaceDir,
       );
+      const distinctSessionCount = countDistinctSessionIds(derived.sessionIds);
 
       const existing = options.memories.find((m) => {
         if (m.statement !== statement || m.scope !== scope) return false;
@@ -272,6 +320,14 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
         );
         return {
           textResultForLlm: `Memory reinforced.\n\nCopilot destination:\n[${destination}](${destination})`,
+          resultType: "success" as const,
+        };
+      }
+
+      if (!existing && scope === "user" && distinctSessionCount < 2) {
+        return {
+          textResultForLlm:
+            "Global write deferred: needs repeated evidence across at least two independent sessions or an existing matching global memory.",
           resultType: "success" as const,
         };
       }

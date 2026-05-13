@@ -247,6 +247,17 @@ function scopeFromPath(path: string): MemoryRecord["scope"] {
 export class CopilotMemoryBackend implements MemoryBackend {
   readonly id = "backend.copilot.memory";
   private readonly target: CopilotTarget;
+  private readonly writtenPaths = new Set<string>();
+
+  private noteWrittenPath(path: string): void {
+    this.writtenPaths.add(path);
+  }
+
+  getWrittenPaths(): string[] {
+    return [...this.writtenPaths.values()].sort((left, right) =>
+      left.localeCompare(right),
+    );
+  }
 
   constructor(workspaceDir: string, targetPath?: string) {
     const { resolvedPath, userPath, workspacePath } = resolveCopilotTargetPaths(
@@ -380,12 +391,14 @@ export class CopilotMemoryBackend implements MemoryBackend {
         JSON.stringify(payload, null, 2),
         "utf8",
       );
+      this.noteWrittenPath(this.target.path);
       return;
     }
 
     if (this.target.kind === "markdown-file") {
       await mkdir(dirname(this.target.path), { recursive: true });
       await writeFile(this.target.path, renderMarkdown(records), "utf8");
+      this.noteWrittenPath(this.target.path);
       return;
     }
 
@@ -439,6 +452,7 @@ export class CopilotMemoryBackend implements MemoryBackend {
       const merged = mergeByStatement(existing, incoming);
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, bulletMarkdown(merged), "utf8");
+      this.noteWrittenPath(path);
     }
   }
 }

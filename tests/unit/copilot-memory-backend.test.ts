@@ -81,6 +81,11 @@ describe("CopilotMemoryBackend", () => {
     expect(sessionFile).toContain("- Retry flaky eval once");
     expect(userFile).not.toContain("dreamer:records:start");
     expect(repoFile).not.toContain("dreamer:records:start");
+    expect(backend.getWrittenPaths()).toEqual([
+      join(root, "communication.md"),
+      join(root, "repo", "architecture.md"),
+      join(root, "session", "workflow.md"),
+    ]);
   });
 
   it("merges with existing markdown bullets instead of replacing files", async () => {
@@ -175,5 +180,9 @@ describe("CopilotMemoryBackend", () => {
     await expect(
       readFile(join(globalRoot, "repo", "workflow.md"), "utf8"),
     ).rejects.toThrow();
+    expect(backend.getWrittenPaths()).toEqual([
+      join(globalRoot, "communication.md"),
+      join(workspaceRoot, "repo", "workflow.md"),
+    ]);
   });
 });

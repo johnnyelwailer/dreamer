@@ -114,6 +114,14 @@ function compactId(value: string, prefix: string): string {
   return value.startsWith(prefix) ? value.slice(prefix.length) : value;
 }
 
+function toFileUri(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  if (/^[a-zA-Z]:\//.test(normalized)) return `file:///${normalized}`;
+  return normalized.startsWith("/")
+    ? `file://${normalized}`
+    : `file:///${normalized}`;
+}
+
 function createRunId(
   workspaceDir: string,
   config: ReturnType<typeof readDreamConfig>,
@@ -472,6 +480,18 @@ export async function runDream(
       `sinceDays=${effectiveSinceDays} sessionScope=${effectiveSessionScopeMode} sessionWorkspace=${effectiveSessionWorkspaceMode} minSessions=${config.minSessions})`;
     context.diary.push(`run:summary=${runSummary}`);
     status.done(runSummary);
+
+    if (backend instanceof CopilotMemoryBackend) {
+      const writtenPaths = backend.getWrittenPaths();
+      if (writtenPaths.length > 0) {
+        console.log("[dream] Copilot memory files written:");
+        for (const path of writtenPaths) {
+          console.log(`[${path}](${toFileUri(path)})`);
+        }
+      } else {
+        console.log("[dream] Copilot memory files written: none");
+      }
+    }
   } finally {
     const maybeDisposable = provider as IntelligenceProvider & {
       dispose?: () => Promise<void>;

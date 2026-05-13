@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { IntelligenceProvider, PipelineStage } from "../core/contracts.js";
 import type { DreamContext, InsightRecord } from "../core/types.js";
@@ -13,6 +12,7 @@ import {
   runConsolidationAgentPasses,
 } from "./consolidation-agent-pack.js";
 import { createConsolidationTools } from "./consolidation-stage-tools.js";
+import { loadStageTemplate } from "./stage-agent-templates.js";
 
 const GLOBAL_EXTRACTOR_NAME = "global-rule-extractor";
 
@@ -49,6 +49,27 @@ async function runGlobalConsolidationPass(
 ): Promise<void> {
   if (!globalExtractor) return;
 
+  const specialistPrompt = await loadStageTemplate(
+    context.workspaceDir,
+    "prompts/stages/consolidation/global-specialist.md",
+    "(missing consolidation global specialist prompt)",
+  );
+  const mainPrompt = await loadStageTemplate(
+    context.workspaceDir,
+    "prompts/stages/consolidation/global-main.md",
+    "(missing consolidation global main prompt)",
+  );
+  const finalVerdictPrompt = await loadStageTemplate(
+    context.workspaceDir,
+    "prompts/stages/consolidation/global-finalize.md",
+    "(missing consolidation global finalize prompt)",
+  );
+  const retryPrompt = await loadStageTemplate(
+    context.workspaceDir,
+    "prompts/stages/consolidation/global-retry.md",
+    "(missing consolidation global retry prompt)",
+  );
+
   const { tools, applyChanges, hasFinalVerdict, getFinalVerdict } =
     createConsolidationTools(
       context.memories,
@@ -61,39 +82,26 @@ async function runGlobalConsolidationPass(
       "global",
     );
 
-  const specialistPrompt = [
-    "Post-consolidation global extraction pass.",
-    "Review current memories and identify only globally generalizable user-scope rules.",
-    "Do not call write_global_memory/remove_memory/finalize_consolidation in this specialist pass.",
-    "Use list_memories and read_reference as needed and return only compact recommendations.",
-    "Workspace-scope memories available for generalization:",
-    formatGlobalCandidateMemories(context),
-  ].join("\n\n");
+  const specialistPromptWithCandidates = `${specialistPrompt}\n\nWorkspace-scope memories available for generalization:\n${formatGlobalCandidateMemories(context)}`;
 
-  const specialistOutput = await provider.runAgent(specialistPrompt, tools, {
+  const specialistOutput = await provider.runAgent(
+    specialistPromptWithCandidates,
+    tools,
+    {
     streamTag: "consolidation global specialist",
     selectedAgent: GLOBAL_EXTRACTOR_NAME,
     customAgents: [globalExtractor],
     defaultAgent: agentPack?.defaultAgent,
     retries: [],
-  });
+    },
+  );
 
-  const mainPrompt = [
-    "Apply global consolidation from specialist recommendations.",
-    "Only write globally valid user-scope memories; do not create workspace-scoped memories in this pass.",
-    "If a workspace memory is globally valid, keep the workspace fact and add/merge a separate user-scope global rule.",
-    "Remove or narrow global memories that are actually workspace-local.",
-    "Call finalize_consolidation when done.",
-    "Specialist findings:",
-    specialistOutput || "(no findings)",
-  ].join("\n\n");
+  const mainPromptWithFindings = `${mainPrompt}\n\nSpecialist findings:\n${specialistOutput || "(no findings)"}`;
 
   try {
-    await provider.runAgent(mainPrompt, tools, {
+    await provider.runAgent(mainPromptWithFindings, tools, {
       streamTag: "consolidation global main",
-      retries: [
-        "Complete the post-consolidation global pass. Apply needed write_global_memory/remove_memory changes and call finalize_consolidation.",
-      ],
+      retries: [retryPrompt],
       shouldRetry: async () => !hasFinalVerdict(),
       customAgents: [globalExtractor],
       defaultAgent: agentPack?.defaultAgent,
@@ -106,9 +114,13 @@ async function runGlobalConsolidationPass(
 
   if (!hasFinalVerdict()) {
     try {
-      await requestConsolidationFinalVerdict(provider, tools, agentPack, [
-        globalExtractor,
-      ]);
+      await requestConsolidationFinalVerdict(
+        provider,
+        tools,
+        agentPack,
+        [globalExtractor],
+        finalVerdictPrompt,
+      );
     } catch (error) {
       context.diary.push(
         `consolidation:global_pass_error=${String(error).slice(0, 120)}`,
@@ -180,6 +192,7 @@ function formatInsights(insights: InsightRecord[]): string {
 }
 
 async function loadPrompt(
+  workspaceDir: string,
   insights: InsightRecord[],
   orientationPath: string,
 ): Promise<string> {
@@ -187,15 +200,16 @@ async function loadPrompt(
     ? formatInsights(insights)
     : "(none - only review and prune existing memories)";
   try {
-    const template = await readFile(
-      resolveAssetPath("prompts/consolidation-stage.md"),
-      "utf8",
+    const template = await loadStageTemplate(
+      workspaceDir,
+      "prompts/consolidation-stage.md",
+      "(missing consolidation workspace prompt)",
     );
     return template
       .replace("{{insights}}", insightList)
       .replace("{{orientation_path}}", orientationPath);
   } catch {
-    return `Consolidate these insights into long-term memory.\n\nNew insights:\n${insightList}\n\nDelegate memory listing/reference inspection to specialist agents, then call write_workspace_memory/remove_memory and finalize_consolidation yourself.`;
+    return "(missing consolidation workspace prompt)";
   }
 }
 
@@ -239,7 +253,7 @@ export class ConsolidationStage implements PipelineStage {
         runDir,
         "workspace",
       );
-    const prompt = await loadPrompt(context.insights, orientationPath);
+    const prompt = await loadPrompt(context.workspaceDir, context.insights, orientationPath);
     const customAgents = await buildConsolidationCustomAgents(
       this.agentPack,
       context.workspaceDir,

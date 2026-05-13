@@ -9,9 +9,6 @@ import {
   renderStageTemplate,
 } from "./stage-agent-templates.js";
 
-const CONSOLIDATION_RETRY =
-  "Continue from specialist review. Delegate to specialists if more evidence is needed, then call write_workspace_memory/remove_memory for final changes and finalize_consolidation before finishing.";
-
 export async function buildConsolidationCustomAgents(
   agentPack: RuntimeStageAgentPackConfig | undefined,
   workspaceDir: string,
@@ -30,7 +27,7 @@ export async function buildConsolidationCustomAgents(
         await loadStageTemplate(
           workspaceDir,
           agent.promptTemplatePath,
-          "Review all memories and produce consolidation recommendations.",
+          "(missing consolidation specialist prompt)",
         ),
         { run_dir: runDir, orientation_path: orientationPath },
       ),
@@ -44,6 +41,7 @@ export async function runConsolidationAgentPasses(
   tools: unknown[],
   agentPack: RuntimeStageAgentPackConfig | undefined,
   customAgents: RunAgentCustomAgentConfig[] | undefined,
+  retries: string[],
   shouldRetry?: () => boolean | Promise<boolean>,
 ): Promise<void> {
   await runStageAgentPack({
@@ -51,7 +49,7 @@ export async function runConsolidationAgentPasses(
     prompt,
     tools,
     streamTag: "consolidation main",
-    retries: [CONSOLIDATION_RETRY],
+    retries,
     shouldRetry,
     customAgents,
     defaultAgent: agentPack?.defaultAgent,
@@ -64,12 +62,8 @@ export async function requestConsolidationFinalVerdict(
   tools: unknown[],
   agentPack: RuntimeStageAgentPackConfig | undefined,
   customAgents: RunAgentCustomAgentConfig[] | undefined,
+  insistPrompt: string,
 ): Promise<void> {
-  const insistPrompt = [
-    "You attempted to finish consolidation without recording the required final verdict.",
-    "Call finalize_consolidation now with status and summary to complete the stage.",
-    "Do not finish without calling finalize_consolidation.",
-  ].join(" ");
   const runOptions = {
     streamTag: "consolidation agent",
     defaultAgent: agentPack?.defaultAgent,

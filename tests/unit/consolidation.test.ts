@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -58,7 +58,8 @@ describe("ConsolidationStage", () => {
           horizon: "long_term",
           reason:
             "Repeated user correction showed this is a durable engineering practice.",
-          references: [{ kind: "file", value: "docs/prd.md" }],
+          references: [{ kind: "session", value: "session-1" }],
+          evidence: [{ session_id: "session-1" }],
         });
         writeTool?.handler({
           statement: "Use fast failing tests before refactors",
@@ -66,7 +67,8 @@ describe("ConsolidationStage", () => {
           horizon: "long_term",
           reason:
             "Repeated user correction showed this is a durable engineering practice.",
-          references: [{ kind: "file", value: "docs/prd.md" }],
+          references: [{ kind: "session", value: "session-1" }],
+          evidence: [{ session_id: "session-1" }],
         });
         finalizeTool?.handler({
           status: "completed",
@@ -78,6 +80,15 @@ describe("ConsolidationStage", () => {
     };
     const stage = new ConsolidationStage(provider);
     const context = buildContext(process.cwd(), "run-x");
+    context.events.push({
+      kind: "session_start",
+      message: "session start",
+      metadata: {
+        sessionId: "session-1",
+        workspaceDir: context.workspaceDir,
+      },
+      timestamp: context.nowIso,
+    });
     context.insights = [
       {
         statement: "Use fast failing tests before refactors",
@@ -341,11 +352,118 @@ describe("ConsolidationStage", () => {
         reason: "The user repeatedly prefers concise progress updates.",
         references: [
           { kind: "session", value: "0084540e-e033-453e-8df3-f0bc5ecc0451" },
+          { kind: "session", value: "f6f9f0a1-38df-4d8e-b2e3-b8aa2b2bc9db" },
         ],
       });
 
       expect(runScopedRef?.resultType).toBe("success");
       expect(idRef?.resultType).toBe("success");
+    } finally {
+      await rm(workspaceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("defers new global writes until the rule repeats across at least two sessions", async () => {
+    const workspaceDir = join(
+      tmpdir(),
+      `dreamer-consolidation-global-strict-${Date.now()}`,
+    );
+    const runDir = join(workspaceDir, ".dreamer-run");
+    await mkdir(join(runDir, "sessions"), { recursive: true });
+
+    try {
+      const memories: any[] = [];
+      const { tools } = createConsolidationTools(
+        memories,
+        "2026-05-10T00:00:00.000Z",
+        [],
+        [],
+        "run-test",
+        workspaceDir,
+        runDir,
+        "global",
+      );
+      const writeGlobalMemory = tools.find(
+        (tool) => tool.name === "write_global_memory",
+      ) as
+        | {
+            handler: (args: Record<string, unknown>) => {
+              textResultForLlm: string;
+              resultType: string;
+            };
+          }
+        | undefined;
+
+      const result = writeGlobalMemory?.handler({
+        statement: "Keep concise status updates during execution",
+        horizon: "long_term",
+        reason: "The user prefers concise progress updates.",
+        references: [
+          { kind: "session", value: "0084540e-e033-453e-8df3-f0bc5ecc0451" },
+        ],
+      });
+
+      expect(result?.resultType).toBe("success");
+      expect(result?.textResultForLlm).toContain("Global write deferred");
+      expect(memories).toHaveLength(0);
+    } finally {
+      await rm(workspaceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("defers workspace writes with unresolved session attribution and records fallback entry", async () => {
+    const workspaceDir = join(
+      tmpdir(),
+      `dreamer-consolidation-unresolved-session-${Date.now()}`,
+    );
+    const runDir = join(workspaceDir, ".dreamer-run");
+    await mkdir(join(runDir, "sessions"), { recursive: true });
+
+    try {
+      const memories: any[] = [];
+      const { tools } = createConsolidationTools(
+        memories,
+        "2026-05-10T00:00:00.000Z",
+        [],
+        [],
+        "run-test",
+        workspaceDir,
+        runDir,
+        "workspace",
+      );
+      const writeMemory = tools.find(
+        (tool) => tool.name === "write_workspace_memory",
+      ) as
+        | {
+            handler: (args: Record<string, unknown>) => {
+              textResultForLlm: string;
+              resultType: string;
+            };
+          }
+        | undefined;
+
+      const result = writeMemory?.handler({
+        statement: "Prefer pnpm for this repository",
+        horizon: "long_term",
+        reason: "This preference is explicit and stable across sessions.",
+        references: [{ kind: "session", value: "session-999" }],
+      });
+
+      const fallbackPath = join(
+        runDir,
+        "fallback",
+        "workspace-attribution",
+        "pending-workspace-writes.ndjson",
+      );
+      const fallbackContent = await readFile(fallbackPath, "utf8");
+
+      expect(result?.resultType).toBe("success");
+      expect(result?.textResultForLlm).toContain(
+        "Not auto-upgraded to global",
+      );
+      expect(memories).toHaveLength(0);
+      expect(fallbackContent).toContain("session-999");
+      expect(fallbackContent).toContain("Prefer pnpm for this repository");
     } finally {
       await rm(workspaceDir, { recursive: true, force: true });
     }
@@ -474,7 +592,7 @@ describe("ConsolidationStage", () => {
       "Your first evidence step must be specialist review, either via orchestrator-run specialist passes or native delegation with the `task` tool",
     );
     expect(calls[0]?.prompt).toContain(
-      "Use only these `agent_type` values: `explore`, `memory-inventory-reviewer`, `contradiction-scope-reviewer`, `reference-validator`, `global-rule-extractor`",
+      "Use only these `agent_type` values: `explore`, `memory-inventory-reviewer`, `contradiction-scope-reviewer`, `reference-validator`",
     );
     expect(calls[0]?.prompt).toContain(
       "Have specialist agents review the full memory store",

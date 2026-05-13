@@ -12,7 +12,11 @@ describe("resolveMemoryScopeBySessionWorkspace", () => {
       new Map([["s1", "D:/other"]]),
       ["s1"],
     );
-    expect(result).toEqual({ scope: "user", downgradedSessionIds: [] });
+    expect(result).toEqual({
+      scope: "user",
+      downgradedSessionIds: [],
+      unresolvedSessionIds: [],
+    });
   });
 
   it("keeps workspace scope for same-workspace sessions", () => {
@@ -25,7 +29,11 @@ describe("resolveMemoryScopeBySessionWorkspace", () => {
       ]),
       ["s1", "s2"],
     );
-    expect(result).toEqual({ scope: "workspace", downgradedSessionIds: [] });
+    expect(result).toEqual({
+      scope: "workspace",
+      downgradedSessionIds: [],
+      unresolvedSessionIds: [],
+    });
   });
 
   it("keeps workspace scope when all referenced sessions map to one foreign workspace", () => {
@@ -38,7 +46,11 @@ describe("resolveMemoryScopeBySessionWorkspace", () => {
       ]),
       ["s1", "s2"],
     );
-    expect(result).toEqual({ scope: "workspace", downgradedSessionIds: [] });
+    expect(result).toEqual({
+      scope: "workspace",
+      downgradedSessionIds: [],
+      unresolvedSessionIds: [],
+    });
   });
 
   it("downgrades workspace scope when referenced sessions span multiple workspaces", () => {
@@ -51,7 +63,25 @@ describe("resolveMemoryScopeBySessionWorkspace", () => {
       ]),
       ["s1", "s2"],
     );
-    expect(result).toEqual({ scope: "user", downgradedSessionIds: ["s2"] });
+    expect(result).toEqual({
+      scope: "user",
+      downgradedSessionIds: ["s2"],
+      unresolvedSessionIds: [],
+    });
+  });
+
+  it("flags unresolved session workspace mappings", () => {
+    const result = resolveMemoryScopeBySessionWorkspace(
+      "workspace",
+      "D:/gh/dreamer",
+      new Map([["s1", "D:/gh/dreamer"]]),
+      ["s1", "s2"],
+    );
+    expect(result).toEqual({
+      scope: "workspace",
+      downgradedSessionIds: [],
+      unresolvedSessionIds: ["s2"],
+    });
   });
 
   it("infers workspace dir when all referenced sessions resolve to one workspace", () => {

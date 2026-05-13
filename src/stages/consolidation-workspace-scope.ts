@@ -3,6 +3,7 @@ export type RequestedMemoryScope = "user" | "workspace";
 export type ScopeResolution = {
   scope: RequestedMemoryScope;
   downgradedSessionIds: string[];
+  unresolvedSessionIds: string[];
 };
 
 function normalizeWorkspacePath(value: string): string {
@@ -21,32 +22,44 @@ export function resolveMemoryScopeBySessionWorkspace(
 ): ScopeResolution {
   void executionRootDir;
   if (requestedScope !== "workspace") {
-    return { scope: requestedScope, downgradedSessionIds: [] };
+    return {
+      scope: requestedScope,
+      downgradedSessionIds: [],
+      unresolvedSessionIds: [],
+    };
   }
 
   if (sessionIds.length === 0) {
-    return { scope: requestedScope, downgradedSessionIds: [] };
+    return {
+      scope: requestedScope,
+      downgradedSessionIds: [],
+      unresolvedSessionIds: [],
+    };
   }
 
   const distinctWorkspaces = new Set<string>();
   const bySessionId = new Map<string, string>();
+  const unresolvedSessionIds: string[] = [];
   for (const sessionId of sessionIds) {
     const sourceWorkspace = sessionSourceWorkspaceById.get(sessionId);
-    if (!sourceWorkspace) continue;
+    if (!sourceWorkspace) {
+      unresolvedSessionIds.push(sessionId);
+      continue;
+    }
     const normalized = normalizeWorkspacePath(sourceWorkspace);
     distinctWorkspaces.add(normalized);
     bySessionId.set(sessionId, normalized);
   }
 
   if (distinctWorkspaces.size <= 1) {
-    return { scope: requestedScope, downgradedSessionIds: [] };
+    return { scope: requestedScope, downgradedSessionIds: [], unresolvedSessionIds };
   }
 
   const [firstWorkspace] = [...distinctWorkspaces];
   const downgradedSessionIds = sessionIds.filter(
     (sessionId) => bySessionId.get(sessionId) !== undefined && bySessionId.get(sessionId) !== firstWorkspace,
   );
-  return { scope: "user", downgradedSessionIds };
+  return { scope: "user", downgradedSessionIds, unresolvedSessionIds };
 }
 
 export function inferWorkspaceDirFromSessionIds(
