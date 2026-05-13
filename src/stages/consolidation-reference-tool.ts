@@ -4,18 +4,55 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 type ReferenceToolOptions = {
-  workspaceDir: string;
+  executionRootDir: string;
   runDir: string;
+  sourceWorkspaceRoots?: string[];
 };
 
-export function safeReadPath(path: string, options: ReferenceToolOptions): string | null {
-  const absolute = resolve(isAbsolute(path) ? path : join(options.workspaceDir, path));
-  const roots = [resolve(options.workspaceDir), resolve(options.runDir)];
-  const allowed = roots.some((root) => {
+function resolveWorkspaceRoots(options: ReferenceToolOptions): string[] {
+  return [options.executionRootDir, ...(options.sourceWorkspaceRoots ?? [])]
+    .map((root) => resolve(root))
+    .filter((value, index, array) => array.indexOf(value) === index);
+}
+
+function isPathAllowed(absolute: string, roots: string[]): boolean {
+  return roots.some((root) => {
     const rel = relative(root, absolute);
     return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
   });
+}
+
+export function safeReadPath(path: string, options: ReferenceToolOptions): string | null {
+  const roots = [...resolveWorkspaceRoots(options), resolve(options.runDir)];
+  const absolute = resolve(
+    isAbsolute(path) ? path : join(options.executionRootDir, path),
+  );
+  const allowed = isPathAllowed(absolute, roots);
   return allowed ? absolute : null;
+}
+
+function resolvePathCandidates(
+  value: string,
+  options: ReferenceToolOptions,
+): string[] {
+  if (isAbsolute(value)) return [resolve(value)];
+  return resolveWorkspaceRoots(options).map((root) => resolve(join(root, value)));
+}
+
+function firstAllowedCandidate(
+  candidates: string[],
+  options: ReferenceToolOptions,
+): string | null {
+  const roots = [...resolveWorkspaceRoots(options), resolve(options.runDir)];
+  for (const candidate of candidates) {
+    if (!isPathAllowed(candidate, roots)) continue;
+    if (existsSync(candidate)) return candidate;
+  }
+  for (const candidate of candidates) {
+    if (!isPathAllowed(candidate, roots)) continue;
+    return candidate;
+  }
+  return null;
 }
 
 function normalizeSessionName(value: string): string {
@@ -82,8 +119,11 @@ export function sessionPath(value: string, runDir: string): string {
 export function resolveReferencePath(kind: string, value: string, options: ReferenceToolOptions): string | null {
   if (kind === "doc" && value.startsWith("dream-run:")) return null;
   if (kind === "url") return null;
-  const candidate = kind === "session" ? sessionPath(value, options.runDir) : value;
-  return safeReadPath(candidate, options);
+  if (kind === "session") {
+    const candidate = sessionPath(value, options.runDir);
+    return safeReadPath(candidate, options);
+  }
+  return firstAllowedCandidate(resolvePathCandidates(value, options), options);
 }
 
 export function createReadReferenceTool(options: ReferenceToolOptions) {

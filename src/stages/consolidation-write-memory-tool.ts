@@ -30,15 +30,19 @@ type CreateWriteMemoryToolOptions = {
   nowIso: string;
   insights: InsightRecord[];
   runId: string;
-  workspaceDir: string;
+  executionRootDir: string;
   runDir: string;
-  sessionWorkspaceById: Map<string, string>;
+  sessionSourceWorkspaceById: Map<string, string>;
   onAdded: (record: MemoryRecord) => void;
   onUpdated: () => void;
 };
 
 function makeId(value: string): string {
   return `mem:${Buffer.from(value).toString("base64url").slice(0, 20)}`;
+}
+
+function normalizeWorkspacePath(value: string): string {
+  return value.replaceAll("/", "\\").replace(/[\\/]+$/, "").trim().toLowerCase();
 }
 
 function readGitField(
@@ -72,17 +76,27 @@ function formatCopilotDestination(
 }
 
 export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
-  const repoRemoteUrl = readGitField(options.workspaceDir, [
-    "config",
-    "--get",
-    "remote.origin.url",
-  ]);
-  const repoBranch = readGitField(options.workspaceDir, [
-    "rev-parse",
-    "--abbrev-ref",
-    "HEAD",
-  ]);
-  const repoCommit = readGitField(options.workspaceDir, ["rev-parse", "HEAD"]);
+  const repoMetadataCache = new Map<
+    string,
+    {
+      repoRemoteUrl: string | undefined;
+      repoBranch: string | undefined;
+      repoCommit: string | undefined;
+    }
+  >();
+
+  const readRepoMetadata = (dir: string) => {
+    const key = normalizeWorkspacePath(dir);
+    const cached = repoMetadataCache.get(key);
+    if (cached) return cached;
+    const metadata = {
+      repoRemoteUrl: readGitField(dir, ["config", "--get", "remote.origin.url"]),
+      repoBranch: readGitField(dir, ["rev-parse", "--abbrev-ref", "HEAD"]),
+      repoCommit: readGitField(dir, ["rev-parse", "HEAD"]),
+    };
+    repoMetadataCache.set(key, metadata);
+    return metadata;
+  };
 
   return defineTool(options.toolName, {
     description:
@@ -148,7 +162,7 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
 
       const references = normalizeReferences(input.references) ?? [];
       const referenceValidation = validateReferencesStrict(references, {
-        workspaceDir: options.workspaceDir,
+        workspaceDir: options.executionRootDir,
         runDir: options.runDir,
       });
       if (!referenceValidation.ok) {
@@ -180,8 +194,8 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
       const mergedReferences = derived.references;
       const scopeDecision = resolveMemoryScopeBySessionWorkspace(
         requestedScope,
-        options.workspaceDir,
-        options.sessionWorkspaceById,
+        options.executionRootDir,
+        options.sessionSourceWorkspaceById,
         derived.sessionIds,
       );
       const scope = scopeDecision.scope;
@@ -193,18 +207,27 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
         };
       }
       const inferredWorkspaceDir = inferWorkspaceDirFromSessionIds(
-        options.sessionWorkspaceById,
+        options.sessionSourceWorkspaceById,
         derived.sessionIds,
       );
       const attributionWorkspaceDir =
-        inferredWorkspaceDir ?? options.workspaceDir;
+        inferredWorkspaceDir ?? options.executionRootDir;
       const attributionWorkspaceId = resolveWorkspaceId(
         attributionWorkspaceDir,
       );
-
-      const existing = options.memories.find(
-        (m) => m.statement === statement && m.scope === scope,
+      const { repoRemoteUrl, repoBranch, repoCommit } = readRepoMetadata(
+        attributionWorkspaceDir,
       );
+
+      const existing = options.memories.find((m) => {
+        if (m.statement !== statement || m.scope !== scope) return false;
+        if (scope !== "workspace") return true;
+        const currentWorkspace =
+          m.provenance?.workspaceDir
+            ? normalizeWorkspacePath(m.provenance.workspaceDir)
+            : undefined;
+        return currentWorkspace === normalizeWorkspacePath(attributionWorkspaceDir);
+      });
       if (existing) {
         existing.confidence = Math.min(1, existing.confidence + 0.05);
         existing.context = {
@@ -242,7 +265,9 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
         options.onUpdated();
         const destination = formatCopilotDestination(
           scope,
-          options.workspaceDir,
+          scope === "workspace"
+            ? attributionWorkspaceDir
+            : options.executionRootDir,
           category ?? undefined,
         );
         return {
@@ -252,7 +277,11 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
       }
 
       const record: MemoryRecord = {
-        id: makeId(statement),
+        id: makeId(
+          scope === "workspace"
+            ? `${scope}:${attributionWorkspaceId}:${statement}`
+            : `${scope}:${statement}`,
+        ),
         scope,
         statement,
         confidence,
@@ -291,7 +320,9 @@ export function createWriteMemoryTool(options: CreateWriteMemoryToolOptions) {
       options.onAdded(record);
       const destination = formatCopilotDestination(
         scope,
-        options.workspaceDir,
+        scope === "workspace"
+          ? attributionWorkspaceDir
+          : options.executionRootDir,
         category ?? undefined,
       );
       return {

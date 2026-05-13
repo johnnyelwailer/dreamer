@@ -15,7 +15,7 @@ export function createConsolidationTools(
   insights: InsightRecord[],
   events: NormalizedEvent[],
   runId: string,
-  workspaceDir: string,
+  executionRootDir: string,
   runDir: string,
   writeToolKind: ConsolidationWriteToolKind,
 ) {
@@ -60,9 +60,7 @@ export function createConsolidationTools(
     },
   });
 
-  const readReferenceTool = createReadReferenceTool({ workspaceDir, runDir });
-
-  const sessionWorkspaceById = new Map<string, string>();
+  const sessionSourceWorkspaceById = new Map<string, string>();
   for (const event of events) {
     if (event.kind !== "session_start") continue;
     const sessionIdRaw = event.metadata.sessionId;
@@ -74,8 +72,17 @@ export function createConsolidationTools(
       workspaceDirRaw.trim().length === 0
     )
       continue;
-    sessionWorkspaceById.set(sessionIdRaw, workspaceDirRaw);
+    sessionSourceWorkspaceById.set(sessionIdRaw, workspaceDirRaw);
   }
+
+  const sourceWorkspaceRoots = [
+    ...new Set([executionRootDir, ...sessionSourceWorkspaceById.values()]),
+  ];
+  const readReferenceTool = createReadReferenceTool({
+    executionRootDir,
+    runDir,
+    sourceWorkspaceRoots,
+  });
 
   const writeMemoryTool = createWriteMemoryTool({
     toolName:
@@ -87,9 +94,9 @@ export function createConsolidationTools(
     nowIso,
     insights,
     runId,
-    workspaceDir,
+    executionRootDir,
     runDir,
-    sessionWorkspaceById,
+    sessionSourceWorkspaceById,
     onAdded: (record) => added.push(record),
     onUpdated: () => {
       updated++;

@@ -28,7 +28,20 @@ describe("resolveMemoryScopeBySessionWorkspace", () => {
     expect(result).toEqual({ scope: "workspace", downgradedSessionIds: [] });
   });
 
-  it("downgrades workspace scope when any referenced session is from a different workspace", () => {
+  it("keeps workspace scope when all referenced sessions map to one foreign workspace", () => {
+    const result = resolveMemoryScopeBySessionWorkspace(
+      "workspace",
+      "D:/gh/dreamer",
+      new Map([
+        ["s1", "D:/gh/another-project"],
+        ["s2", "d:/gh/another-project/"],
+      ]),
+      ["s1", "s2"],
+    );
+    expect(result).toEqual({ scope: "workspace", downgradedSessionIds: [] });
+  });
+
+  it("downgrades workspace scope when referenced sessions span multiple workspaces", () => {
     const result = resolveMemoryScopeBySessionWorkspace(
       "workspace",
       "D:/gh/dreamer",
