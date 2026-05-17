@@ -7,7 +7,7 @@ Dreamer plugins are ESM modules that register one or more runtime pieces with th
 - intelligence providers
 - pipeline stages, including custom dreaming systems
 
-At startup, Dreamer loads plugins before resolving `DREAM_ADAPTER_ID`, `DREAM_BACKEND_ID`, `DREAM_PROVIDER_ID`, and `pipeline.stageOrder`. That means a plugin can add a new id and runtime config can select it without changing core code.
+At startup, Dreamer loads plugins before resolving `DREAM_ADAPTER_ID`, `DREAM_BACKEND_ID`, `DREAM_BACKEND_IDS`, `DREAM_PROVIDER_ID`, and `pipeline.stageOrder`. That means a plugin can add a new id and runtime config can select it without changing core code.
 
 ## Where Plugins Are Loaded From
 
@@ -71,6 +71,12 @@ DREAM_ADAPTER_ID=adapter.my-system \
 DREAM_BACKEND_ID=backend.my-memory \
 DREAM_STAGE_ORDER=stage.orientation,stage.my-dreaming,stage.consolidation,stage.governance,stage.observability \
 pnpm dream:unsafe
+```
+
+To fan out writes to more than one memory backend, set a comma-separated list:
+
+```bash
+DREAM_BACKEND_IDS=backend.file.memory,backend.my-memory pnpm dream:unsafe
 ```
 
 Or configure stage order permanently in `.dreamer/config/runtime.json`.

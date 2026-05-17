@@ -8,6 +8,8 @@ import { workspaceStorageDir } from "../../src/dream/dreamer-home.js";
 const tempDirs: string[] = [];
 const envKeys = [
   "DREAM_ADAPTER_ID",
+  "DREAM_BACKEND_ID",
+  "DREAM_BACKEND_IDS",
   "DREAM_STAGE_ORDER",
   "COPILOT_SDK_MODEL",
   "DREAM_RUNTIME_CONFIG_FILE",
@@ -15,7 +17,7 @@ const envKeys = [
   "DREAM_COPILOT_SESSION_SCOPE_MODE",
   "DREAM_COPILOT_SESSION_WORKSPACE_MODE",
   "DREAM_COPILOT_BATCH_SESSIONS",
-  "DREAM_STAGE_IMPLEMENTATIONS"
+  "DREAM_STAGE_IMPLEMENTATIONS",
 ] as const;
 const envSnapshot = new Map(envKeys.map((key) => [key, process.env[key]]));
 
@@ -25,10 +27,12 @@ afterEach(async () => {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
-  await Promise.all(tempDirs.splice(0).map(async (dir) => {
-    await rm(workspaceStorageDir(dir), { recursive: true, force: true });
-    await rm(dir, { recursive: true, force: true });
-  }));
+  await Promise.all(
+    tempDirs.splice(0).map(async (dir) => {
+      await rm(workspaceStorageDir(dir), { recursive: true, force: true });
+      await rm(dir, { recursive: true, force: true });
+    }),
+  );
 });
 
 async function tempWorkspace(): Promise<string> {
@@ -40,63 +44,82 @@ async function tempWorkspace(): Promise<string> {
 async function writeRuntime(workspaceDir: string): Promise<void> {
   const storageDir = workspaceStorageDir(workspaceDir);
   await mkdir(storageDir, { recursive: true });
-  await writeFile(join(storageDir, "runtime.json"), JSON.stringify({
-    provider: {
-      id: "provider.copilot.sdk",
-      defaultModel: "runtime-model",
-      sdk: {
-        authMode: "none",
-        providerMode: "copilot",
-        requestTimeoutMs: 1000,
-        clientExtraEnvVars: []
-      }
-    },
-    pipeline: {
-      stageOrder: ["stage.orientation", "stage.signal"],
-      stageImplementations: {
-        "stage.signal": "stage.signal"
-      }
-    },
-    docs: {
-      outputRootPath: "docs/generated",
-      fallbackOutputPath: "docs/generated/DREAM_OUTPUT.md",
-      promptTemplatePath: "docs/generated/template.md",
-      improvementHintsPath: "docs/generated/hints.md",
-      maxSignals: 25,
-      maxMemories: 25,
-      maxEvents: 25
-    },
-    eval: {
-      reportPath: "reports/evals/copilot-sdk-eval.json",
-      requestTimeoutMs: 120000,
-      maxAttempts: 3,
-      quality: {
-        reportPath: "reports/evals/dream-quality-eval.json",
-        selfImproveReportPath: "reports/evals/dream-self-improve.json",
-        minPassingScore: 0.8,
-        maxHintsToPersist: 8,
-        rubricPath: "reports/evals/rubric.json"
+  await writeFile(
+    join(storageDir, "runtime.json"),
+    JSON.stringify(
+      {
+        provider: {
+          id: "provider.copilot.sdk",
+          defaultModel: "runtime-model",
+          sdk: {
+            authMode: "none",
+            providerMode: "copilot",
+            requestTimeoutMs: 1000,
+            clientExtraEnvVars: [],
+          },
+        },
+        pipeline: {
+          stageOrder: ["stage.orientation", "stage.signal"],
+          stageImplementations: {
+            "stage.signal": "stage.signal",
+          },
+        },
+        docs: {
+          outputRootPath: "docs/generated",
+          fallbackOutputPath: "docs/generated/DREAM_OUTPUT.md",
+          promptTemplatePath: "docs/generated/template.md",
+          improvementHintsPath: "docs/generated/hints.md",
+          maxSignals: 25,
+          maxMemories: 25,
+          maxEvents: 25,
+        },
+        eval: {
+          reportPath: "reports/evals/copilot-sdk-eval.json",
+          requestTimeoutMs: 120000,
+          maxAttempts: 3,
+          quality: {
+            reportPath: "reports/evals/dream-quality-eval.json",
+            selfImproveReportPath: "reports/evals/dream-self-improve.json",
+            minPassingScore: 0.8,
+            maxHintsToPersist: 8,
+            rubricPath: "reports/evals/rubric.json",
+          },
+          casesPath: "reports/evals/cases.json",
+        },
       },
-      casesPath: "reports/evals/cases.json"
-    }
-  }, null, 2), "utf8");
+      null,
+      2,
+    ),
+    "utf8",
+  );
 }
 
 describe("readDreamConfig", () => {
   it("loads missing env values from .env.local", async () => {
     const workspaceDir = await tempWorkspace();
     await writeRuntime(workspaceDir);
-    await writeFile(join(workspaceDir, ".env.local"), [
-      "DREAM_ADAPTER_ID=adapter.jsonl.event",
-      "DREAM_STAGE_ORDER=stage.orientation,stage.observability",
-      "COPILOT_SDK_MODEL=dotenv-model"
-    ].join("\n"), "utf8");
+    await writeFile(
+      join(workspaceDir, ".env.local"),
+      [
+        "DREAM_ADAPTER_ID=adapter.jsonl.event",
+        "DREAM_STAGE_ORDER=stage.orientation,stage.observability",
+        "COPILOT_SDK_MODEL=dotenv-model",
+      ].join("\n"),
+      "utf8",
+    );
 
     const config = readDreamConfig(workspaceDir);
 
     expect(config.adapterId).toBe("adapter.jsonl.event");
-    expect(config.stageOrder).toEqual(["slot.orientation", "slot.observability"]);
-    expect(config.stageImplementations).toEqual({ "slot.signal": "stage.signal" });
+    expect(config.backendId).toBe("backend.file.memory");
+    expect(config.backendIds).toEqual(["backend.file.memory"]);
+    expect(config.stageOrder).toEqual([
+      "slot.orientation",
+      "slot.observability",
+    ]);
+    expect(config.stageImplementations).toEqual({
+      "slot.signal": "stage.signal",
+    });
     expect(config.copilotSdkModel).toBe("dotenv-model");
     expect(config.memoryBackupEnabled).toBe(true);
     expect(config.memoryBackupExternalOnly).toBe(true);
@@ -105,17 +128,40 @@ describe("readDreamConfig", () => {
   it("reads stage implementation bindings from environment", async () => {
     const workspaceDir = await tempWorkspace();
     await writeRuntime(workspaceDir);
-    process.env.DREAM_STAGE_IMPLEMENTATIONS = "stage.signal=impl.signal.local-honcho-ingest";
+    process.env.DREAM_STAGE_IMPLEMENTATIONS =
+      "stage.signal=impl.signal.local-honcho-ingest";
 
     const config = readDreamConfig(workspaceDir);
 
-    expect(config.stageImplementations).toEqual({ "slot.signal": "impl.signal.local-honcho-ingest" });
+    expect(config.stageImplementations).toEqual({
+      "slot.signal": "impl.signal.local-honcho-ingest",
+    });
+  });
+
+  it("reads multiple memory backends from environment", async () => {
+    const workspaceDir = await tempWorkspace();
+    await writeRuntime(workspaceDir);
+    process.env.DREAM_BACKEND_ID = "backend.file.memory";
+    process.env.DREAM_BACKEND_IDS =
+      "backend.file.memory,backend.copilot.memory";
+
+    const config = readDreamConfig(workspaceDir);
+
+    expect(config.backendId).toBe("backend.file.memory");
+    expect(config.backendIds).toEqual([
+      "backend.file.memory",
+      "backend.copilot.memory",
+    ]);
   });
 
   it("does not let .env.local override an exported env var", async () => {
     const workspaceDir = await tempWorkspace();
     await writeRuntime(workspaceDir);
-    await writeFile(join(workspaceDir, ".env.local"), "COPILOT_SDK_MODEL=dotenv-model\n", "utf8");
+    await writeFile(
+      join(workspaceDir, ".env.local"),
+      "COPILOT_SDK_MODEL=dotenv-model\n",
+      "utf8",
+    );
     process.env.COPILOT_SDK_MODEL = "process-model";
 
     const config = readDreamConfig(workspaceDir);
@@ -139,7 +185,9 @@ describe("readDreamConfig", () => {
 
     const defaultConfig = readDreamConfig(workspaceDir);
     expect(defaultConfig.copilotDebugSessionScopeMode).toBe("newest-first");
-    expect(defaultConfig.copilotDebugSessionWorkspaceMode).toBe("session-preferred");
+    expect(defaultConfig.copilotDebugSessionWorkspaceMode).toBe(
+      "session-preferred",
+    );
     expect(defaultConfig.copilotDebugBatchSessions).toBe(3);
 
     process.env.DREAM_COPILOT_SESSION_SCOPE_MODE = "coverage";
@@ -147,7 +195,9 @@ describe("readDreamConfig", () => {
     process.env.DREAM_COPILOT_BATCH_SESSIONS = "7";
     const overridden = readDreamConfig(workspaceDir);
     expect(overridden.copilotDebugSessionScopeMode).toBe("coverage");
-    expect(overridden.copilotDebugSessionWorkspaceMode).toBe("session-required");
+    expect(overridden.copilotDebugSessionWorkspaceMode).toBe(
+      "session-required",
+    );
     expect(overridden.copilotDebugBatchSessions).toBe(7);
   });
 });

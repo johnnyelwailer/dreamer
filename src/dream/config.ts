@@ -4,18 +4,37 @@ import type { CopilotSdkProviderOptions } from "../providers/copilot-sdk-provide
 import type { RuntimeStageAgentPackConfig } from "./runtime-manifest.js";
 import { buildCopilotSdkProviderOptions } from "./copilot-sdk-options.js";
 import { discoverCopilotDebugSessionDir } from "./copilot-debug-session-discovery.js";
-import { discoverClaudeCodeLogPath, discoverCodexTraceLogPath } from "./adapter-log-discovery.js";
+import {
+  discoverClaudeCodeLogPath,
+  discoverCodexTraceLogPath,
+} from "./adapter-log-discovery.js";
 import { defaultCopilotMemoryTarget } from "./copilot-memory-path.js";
-import { loadWorkspaceDotenv, readList, readPositiveInteger, readPositiveNumber } from "./config-env.js";
+import {
+  loadWorkspaceDotenv,
+  readList,
+  readPositiveInteger,
+  readPositiveNumber,
+} from "./config-env.js";
 import { workspaceStorageDir } from "./dreamer-home.js";
-import { readBoolean, readHonchoEnvironment, readSessionScopeMode, readSessionWorkspaceMode, type HonchoEnvironment } from "./config-readers.js";
-import { mergeStageImplementationBindings, normalizeStageSlotId, parseStageImplementationBindings } from "./stage-implementation-config.js";
+import {
+  readBoolean,
+  readHonchoEnvironment,
+  readSessionScopeMode,
+  readSessionWorkspaceMode,
+  type HonchoEnvironment,
+} from "./config-readers.js";
+import {
+  mergeStageImplementationBindings,
+  normalizeStageSlotId,
+  parseStageImplementationBindings,
+} from "./stage-implementation-config.js";
 import type { CopilotSessionScopeMode } from "../adapters/copilot-debug/types.js";
 import type { SessionWorkspaceMode } from "../stages/session-workspace-strategy.js";
 
 export type DreamConfig = {
   adapterId: string;
   backendId: string;
+  backendIds: string[];
   providerId: string;
   stageOrder: string[];
   stageImplementations: Record<string, string>;
@@ -73,28 +92,39 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
   const fixturesDir = join(storageDir, "fixtures");
   const runtime = readRuntimeManifest(workspaceDir);
   const stageOrderOverride = readList(process.env.DREAM_STAGE_ORDER);
-  const stageImplementationOverride = parseStageImplementationBindings(process.env.DREAM_STAGE_IMPLEMENTATIONS);
-  const copilotSdkModel = process.env.COPILOT_SDK_MODEL ?? runtime.provider.defaultModel;
+  const stageImplementationOverride = parseStageImplementationBindings(
+    process.env.DREAM_STAGE_IMPLEMENTATIONS,
+  );
+  const backendIds = readList(process.env.DREAM_BACKEND_IDS);
+  const backendId = process.env.DREAM_BACKEND_ID ?? "backend.file.memory";
+  const copilotSdkModel =
+    process.env.COPILOT_SDK_MODEL ?? runtime.provider.defaultModel;
   const discoveredCopilotDebugSessionDir = discoverCopilotDebugSessionDir({
     searchPaths: runtime.discovery?.copilotDebug?.searchPaths,
     mode: runtime.discovery?.copilotDebug?.mode,
-    lookbackDays: runtime.discovery?.copilotDebug?.lookbackDays
+    lookbackDays: runtime.discovery?.copilotDebug?.lookbackDays,
   });
   const discoveredClaudeCodePath = discoverClaudeCodeLogPath({
     searchPaths: runtime.discovery?.claudeCode?.searchPaths,
-    mode: runtime.discovery?.claudeCode?.mode
+    mode: runtime.discovery?.claudeCode?.mode,
   });
   const discoveredCodexTracePath = discoverCodexTraceLogPath({
     searchPaths: runtime.discovery?.codexTrace?.searchPaths,
-    mode: runtime.discovery?.codexTrace?.mode
+    mode: runtime.discovery?.codexTrace?.mode,
   });
   return {
     adapterId: process.env.DREAM_ADAPTER_ID ?? "adapter.copilot.debug",
-    backendId: process.env.DREAM_BACKEND_ID ?? "backend.file.memory",
+    backendId,
+    backendIds: backendIds.length > 0 ? backendIds : [backendId],
     providerId: process.env.DREAM_PROVIDER_ID ?? runtime.provider.id,
-    stageOrder: (stageOrderOverride.length > 0 ? stageOrderOverride : runtime.pipeline.stageOrder)
-      .map(normalizeStageSlotId),
-    stageImplementations: mergeStageImplementationBindings(runtime.pipeline.stageImplementations, stageImplementationOverride),
+    stageOrder: (stageOrderOverride.length > 0
+      ? stageOrderOverride
+      : runtime.pipeline.stageOrder
+    ).map(normalizeStageSlotId),
+    stageImplementations: mergeStageImplementationBindings(
+      runtime.pipeline.stageImplementations,
+      stageImplementationOverride,
+    ),
     stageAgentPacks: runtime.pipeline.agentPacks,
     pluginPaths: runtime.plugins?.paths ?? [],
     minSessions: Number(process.env.DREAM_MIN_SESSIONS ?? "1"),
@@ -102,43 +132,78 @@ export function readDreamConfig(workspaceDir: string): DreamConfig {
       process.env.COPILOT_DEBUG_SESSION_DIR ??
       discoveredCopilotDebugSessionDir ??
       join(fixturesDir, "copilot-session"),
-    copilotDebugDiscoveryMode: runtime.discovery?.copilotDebug?.mode ?? "append",
+    copilotDebugDiscoveryMode:
+      runtime.discovery?.copilotDebug?.mode ?? "append",
     copilotDebugSearchPaths: runtime.discovery?.copilotDebug?.searchPaths ?? [],
     copilotDebugLookbackDays:
-      readPositiveNumber(process.env.DREAM_COPILOT_LOOKBACK_DAYS) ?? runtime.discovery?.copilotDebug?.lookbackDays,
+      readPositiveNumber(process.env.DREAM_COPILOT_LOOKBACK_DAYS) ??
+      runtime.discovery?.copilotDebug?.lookbackDays,
     copilotDebugMaxSessionsPerRun:
       readPositiveInteger(process.env.DREAM_COPILOT_MAX_SESSIONS_PER_RUN) ??
       runtime.discovery?.copilotDebug?.maxSessionsPerRun,
-    copilotDebugBatchSessions: readPositiveInteger(process.env.DREAM_COPILOT_BATCH_SESSIONS) ?? 3,
+    copilotDebugBatchSessions:
+      readPositiveInteger(process.env.DREAM_COPILOT_BATCH_SESSIONS) ?? 3,
     copilotDebugSessionScopeMode:
-      readSessionScopeMode(process.env.DREAM_COPILOT_SESSION_SCOPE_MODE) ?? "newest-first",
+      readSessionScopeMode(process.env.DREAM_COPILOT_SESSION_SCOPE_MODE) ??
+      "newest-first",
     copilotDebugSessionWorkspaceMode:
-      readSessionWorkspaceMode(process.env.DREAM_COPILOT_SESSION_WORKSPACE_MODE) ?? "session-preferred",
-    jsonlEventsPath: process.env.DREAM_JSONL_EVENTS_FILE ?? join(fixturesDir, "events.jsonl"),
+      readSessionWorkspaceMode(
+        process.env.DREAM_COPILOT_SESSION_WORKSPACE_MODE,
+      ) ?? "session-preferred",
+    jsonlEventsPath:
+      process.env.DREAM_JSONL_EVENTS_FILE ?? join(fixturesDir, "events.jsonl"),
     claudeCodePath:
-      process.env.DREAM_CLAUDE_CODE_FILE ?? discoveredClaudeCodePath ?? join(fixturesDir, "claude-code.jsonl"),
+      process.env.DREAM_CLAUDE_CODE_FILE ??
+      discoveredClaudeCodePath ??
+      join(fixturesDir, "claude-code.jsonl"),
     codexTracePath:
-      process.env.DREAM_CODEX_TRACE_FILE ?? discoveredCodexTracePath ?? join(fixturesDir, "codex.jsonl"),
-    terminalCastPath: process.env.DREAM_TERMINAL_CAST_FILE ?? join(fixturesDir, "terminal.cast"),
-    browserHarPath: process.env.DREAM_BROWSER_TRACE_FILE ?? join(fixturesDir, "browser.har"),
-    copilotMemoryPath: process.env.DREAM_COPILOT_MEMORY_FILE ?? defaultCopilotMemoryTarget(workspaceDir),
-    memoryBackupEnabled: readBoolean(process.env.DREAM_MEMORY_BACKUP_ENABLED, true),
-    memoryBackupDir: process.env.DREAM_MEMORY_BACKUP_DIR ?? join(storageDir, "backups", "memories"),
-    memoryBackupExternalOnly: readBoolean(process.env.DREAM_MEMORY_BACKUP_EXTERNAL_ONLY, true),
+      process.env.DREAM_CODEX_TRACE_FILE ??
+      discoveredCodexTracePath ??
+      join(fixturesDir, "codex.jsonl"),
+    terminalCastPath:
+      process.env.DREAM_TERMINAL_CAST_FILE ??
+      join(fixturesDir, "terminal.cast"),
+    browserHarPath:
+      process.env.DREAM_BROWSER_TRACE_FILE ?? join(fixturesDir, "browser.har"),
+    copilotMemoryPath:
+      process.env.DREAM_COPILOT_MEMORY_FILE ??
+      defaultCopilotMemoryTarget(workspaceDir),
+    memoryBackupEnabled: readBoolean(
+      process.env.DREAM_MEMORY_BACKUP_ENABLED,
+      true,
+    ),
+    memoryBackupDir:
+      process.env.DREAM_MEMORY_BACKUP_DIR ??
+      join(storageDir, "backups", "memories"),
+    memoryBackupExternalOnly: readBoolean(
+      process.env.DREAM_MEMORY_BACKUP_EXTERNAL_ONLY,
+      true,
+    ),
     honchoExportPath:
-      process.env.DREAM_HONCHO_WORKSPACE_FILE ?? join(storageDir, "honcho", "workspace.json"),
-    honchoWorkspaceId: process.env.DREAM_HONCHO_WORKSPACE_ID ?? process.env.HONCHO_WORKSPACE_ID ?? "dreamer",
-    honchoApiKey: process.env.DREAM_HONCHO_API_KEY ?? process.env.HONCHO_API_KEY,
+      process.env.DREAM_HONCHO_WORKSPACE_FILE ??
+      join(storageDir, "honcho", "workspace.json"),
+    honchoWorkspaceId:
+      process.env.DREAM_HONCHO_WORKSPACE_ID ??
+      process.env.HONCHO_WORKSPACE_ID ??
+      "dreamer",
+    honchoApiKey:
+      process.env.DREAM_HONCHO_API_KEY ?? process.env.HONCHO_API_KEY,
     honchoBaseUrl: process.env.DREAM_HONCHO_BASE_URL ?? process.env.HONCHO_URL,
-    honchoEnvironment: readHonchoEnvironment(process.env.DREAM_HONCHO_ENVIRONMENT),
+    honchoEnvironment: readHonchoEnvironment(
+      process.env.DREAM_HONCHO_ENVIRONMENT,
+    ),
     copilotSdkModel,
-    copilotSdkProviderOptions: buildCopilotSdkProviderOptions(runtime, copilotSdkModel, workspaceDir),
+    copilotSdkProviderOptions: buildCopilotSdkProviderOptions(
+      runtime,
+      copilotSdkModel,
+      workspaceDir,
+    ),
     docsOutputRootPath: runtime.docs.outputRootPath,
     docsFallbackOutputPath: runtime.docs.fallbackOutputPath,
     docsPromptTemplatePath: runtime.docs.promptTemplatePath,
     docsImprovementHintsPath: runtime.docs.improvementHintsPath,
     docsMaxSignals: runtime.docs.maxSignals,
     docsMaxMemories: runtime.docs.maxMemories,
-    docsMaxEvents: runtime.docs.maxEvents
+    docsMaxEvents: runtime.docs.maxEvents,
   };
 }

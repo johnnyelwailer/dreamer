@@ -17,7 +17,7 @@ At a high level, one dream run does this:
 3. Consolidate those signals into structured memory records.
 4. Optionally generate project documentation and reports (currently not implemented and not the current focus).
 
-Outputs are written to generated docs, reports, and the selected memory backend.
+Outputs are written to generated docs, reports, and the selected memory backend or backends.
 
 For a detailed stage-by-stage view, see [docs/generated/pipeline-stages.md](docs/generated/pipeline-stages.md).
 
@@ -63,7 +63,7 @@ pnpm dev setup
 - Basic dreaming pipeline (ingest -> signal -> consolidate -> report): implemented
 - Local-first workflow with isolated run mode: implemented
 - Multiple transcript adapters: implemented
-- Multiple memory backends (file, Copilot, Honcho): implemented
+- Multiple memory backends (file, Copilot, Honcho, including fan-out writes): implemented
 - Plugin system (adapters/backends/stages/providers): implemented, still evolving
 - Runtime/provider matrix hardening across all combinations: partial
 - Long-running scheduling and production hardening: partial
@@ -75,7 +75,7 @@ Testing notes (important):
 
 ## Future Improvements
 
-- Multi-backend memory operation in the same run, including clear merge/sync semantics and possible read/write role separation per backend.
+- Clear multi-backend merge/sync semantics and possible read/write role separation per backend.
 - Broader ecosystem support, including validated Codex and Claude flows plus OpenCode-style memory integration.
 - Self-documentation and self-refinement stages (for example AGENTS/Claude guidance and skills auto-refinement as follow-up stages).
 

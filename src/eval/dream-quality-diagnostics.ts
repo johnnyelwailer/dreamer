@@ -66,6 +66,7 @@ export async function buildDreamQualityDiagnostics(workspaceDir: string, config:
     runConfig: {
       adapterId: config.adapterId,
       backendId: config.backendId,
+      backendIds: config.backendIds,
       providerId: config.providerId,
       model: config.copilotSdkModel
     },

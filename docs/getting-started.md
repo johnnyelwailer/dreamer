@@ -82,6 +82,12 @@ To run with Honcho backend in isolated mode, use:
 pnpm dream:honcho
 ```
 
+To write the same memory records to multiple backends in one run, set:
+
+```bash
+DREAM_BACKEND_IDS=backend.file.memory,backend.copilot.memory pnpm dream
+```
+
 Expected outputs include:
 
 - `docs/generated/*.md`

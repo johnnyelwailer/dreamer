@@ -10,7 +10,8 @@ import { CopilotMemoryBackend } from "../backends/copilot-memory-backend.js";
 import { FileMemoryBackend } from "../backends/file-memory-backend.js";
 import { HonchoMemoryBackend } from "../backends/honcho-memory-backend.js";
 import { InMemoryBackend } from "../backends/in-memory-backend.js";
-import type { IntelligenceProvider } from "../core/contracts.js";
+import { MultiMemoryBackend } from "../backends/multi-memory-backend.js";
+import type { IntelligenceProvider, MemoryBackend } from "../core/contracts.js";
 import { runPipeline } from "../core/pipeline.js";
 import { PluginRegistry } from "../core/registry.js";
 import { ProviderSessionNamer } from "../core/session-naming.js";
@@ -139,9 +140,31 @@ function createRunId(
     20,
   );
   const adapter = slug(compactId(config.adapterId, "adapter."), "adapter", 20);
-  const backend = slug(compactId(config.backendId, "backend."), "backend", 20);
+  const backend = slug(
+    config.backendIds.map((id) => compactId(id, "backend.")).join("+"),
+    "backend",
+    20,
+  );
   const context = `${adapter}-${backend}`.slice(0, 36);
   return `run-${workspace}-${repo}-${branch}-${context}-${Date.now()}`;
+}
+
+function resolveMemoryBackend(
+  registry: PluginRegistry,
+  backendIds: string[],
+): MemoryBackend {
+  const backends = backendIds.map((id) => registry.requireBackend(id));
+  return backends.length === 1
+    ? (backends[0] as MemoryBackend)
+    : new MultiMemoryBackend(backends);
+}
+
+function findCopilotBackends(backend: MemoryBackend): CopilotMemoryBackend[] {
+  if (backend instanceof CopilotMemoryBackend) return [backend];
+  if (backend instanceof MultiMemoryBackend) {
+    return backend.getBackends().flatMap((item) => findCopilotBackends(item));
+  }
+  return [];
 }
 
 export async function runDream(
@@ -170,7 +193,7 @@ export async function runDream(
   };
   const status = createTtyStatus("[dream]");
   status.update(
-    `start run=${runId} adapter=${config.adapterId} backend=${config.backendId} provider=${config.providerId}`,
+    `start run=${runId} adapter=${config.adapterId} backends=${config.backendIds.join(",")} provider=${config.providerId}`,
   );
   const registry = new PluginRegistry();
   registry.registerAdapter(new CopilotDebugAdapter(copilotAdapterOptions));
@@ -212,7 +235,7 @@ export async function runDream(
     status.update(`loaded plugins=${loadedPlugins.length}`);
 
   const adapter = registry.requireAdapter(config.adapterId);
-  const backend = registry.requireBackend(config.backendId);
+  const backend = resolveMemoryBackend(registry, config.backendIds);
   const provider = registry.requireProvider(config.providerId);
   const state = new JsonStateStore(JsonStateStore.runStatePath(workspaceDir));
   const requestedSessionWorkspaceMode =
@@ -295,6 +318,7 @@ export async function runDream(
     );
     context.diary.push(`config:adapter=${config.adapterId}`);
     context.diary.push(`config:backend=${config.backendId}`);
+    context.diary.push(`config:backends=${config.backendIds.join(",")}`);
     context.diary.push(`config:provider=${config.providerId}`);
     context.diary.push(`config:model=${config.copilotSdkModel}`);
     context.diary.push(
@@ -481,8 +505,11 @@ export async function runDream(
     context.diary.push(`run:summary=${runSummary}`);
     status.done(runSummary);
 
-    if (backend instanceof CopilotMemoryBackend) {
-      const writtenPaths = backend.getWrittenPaths();
+    const copilotBackends = findCopilotBackends(backend);
+    if (copilotBackends.length > 0) {
+      const writtenPaths = [
+        ...new Set(copilotBackends.flatMap((item) => item.getWrittenPaths())),
+      ];
       if (writtenPaths.length > 0) {
         console.log("[dream] Copilot memory files written:");
         for (const path of writtenPaths) {

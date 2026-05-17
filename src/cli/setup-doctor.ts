@@ -30,7 +30,11 @@ export async function runSetupDoctor(workspaceDir: string, strict: boolean): Pro
     checks.push({ status: "ok", label: "auth mode", detail: runtime.provider.sdk.authMode });
     checks.push({ status: "ok", label: "model", detail: config.copilotSdkModel });
     checks.push({ status: "ok", label: "adapter", detail: config.adapterId });
-    checks.push({ status: "ok", label: "backend", detail: config.backendId });
+    checks.push({
+      status: "ok",
+      label: "backend",
+      detail: config.backendIds.join(","),
+    });
 
     const byok = runtime.provider.sdk.byok;
     const byokBaseUrl = byok

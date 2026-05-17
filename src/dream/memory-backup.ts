@@ -10,6 +10,7 @@ import { workspaceStorageDir } from "./dreamer-home.js";
 export type MemoryBackupConfig = Pick<
   DreamConfig,
   | "backendId"
+  | "backendIds"
   | "copilotMemoryPath"
   | "honchoExportPath"
   | "memoryBackupEnabled"
@@ -30,6 +31,7 @@ type BackupItem = {
 export type MemoryBackupResult = {
   backupDir: string;
   backendId: string;
+  backendIds: string[];
   createdAt: string;
   items: BackupItem[];
 };
@@ -58,18 +60,23 @@ function candidatePaths(
   config: MemoryBackupConfig,
 ): string[] {
   const storageDir = workspaceStorageDir(workspaceDir);
-  if (config.backendId === "backend.copilot.memory") {
-    return [
-      config.copilotMemoryPath,
-      discoverCopilotWorkspaceMemoryRoot(workspaceDir, false),
-      discoverCopilotGlobalMemoryRoot(false),
-    ].filter((path): path is string => Boolean(path));
+  const paths: string[] = [];
+  for (const backendId of config.backendIds) {
+    if (backendId === "backend.copilot.memory") {
+      paths.push(
+        ...[
+          config.copilotMemoryPath,
+          discoverCopilotWorkspaceMemoryRoot(workspaceDir, false),
+          discoverCopilotGlobalMemoryRoot(false),
+        ].filter((path): path is string => Boolean(path)),
+      );
+    }
+    if (backendId === "backend.honcho.memory")
+      paths.push(config.honchoExportPath);
+    if (backendId === "backend.file.memory")
+      paths.push(join(storageDir, "memory.json"));
   }
-  if (config.backendId === "backend.honcho.memory")
-    return [config.honchoExportPath];
-  if (config.backendId === "backend.file.memory")
-    return [join(storageDir, "memory.json")];
-  return [];
+  return paths;
 }
 
 export async function backupMemoryBeforeRun(
@@ -83,7 +90,7 @@ export async function backupMemoryBeforeRun(
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backupDir = join(
     config.memoryBackupDir,
-    `${runId}-${timestamp}-${config.backendId.replace(/[^a-z0-9.-]/gi, "_")}`,
+    `${runId}-${timestamp}-${config.backendIds.join("+").replace(/[^a-z0-9.-]/gi, "_")}`,
   );
 
   const items: BackupItem[] = [];
@@ -127,6 +134,7 @@ export async function backupMemoryBeforeRun(
   const result: MemoryBackupResult = {
     backupDir,
     backendId: config.backendId,
+    backendIds: config.backendIds,
     createdAt: new Date().toISOString(),
     items,
   };
